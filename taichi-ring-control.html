@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="YKcOQwmNm74mM09gndxA6d">
+<head data-page-node-id="WzGcWSE7modKnB17DbXlwO">
+<meta charset="utf-8" data-page-node-id="vjKakfFyZ4nG0EIJbKaJLL" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="rU7yR1t0kiO7HOiChdaGxp" />
+<title>旋转太极罗盘控件 · 初级原型</title>
+<style>
+  :root{
+    --bg1:#0a0c12;
+    --bg2:#11151f;
+    --panel:#151a26;
+    --panel2:#1c2230;
+    --line:#2a3245;
+    --txt:#dfe5f1;
+    --muted:#8a93a8;
+    --gold:#e7c873;
+    --gold2:#f3dfa0;
+    --accent:#6c9bff;
+    --danger:#e0705f;
+    --ok:#5bd0a4;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;}
+  body{
+    font-family:"Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    color:var(--txt);
+    background:radial-gradient(1200px 800px at 30% 20%, #182032, var(--bg1));
+    overflow:hidden;
+  }
+  #app{display:flex;flex-direction:column;height:100vh;}
+  header{
+    display:flex;align-items:center;gap:14px;
+    padding:12px 20px;border-bottom:1px solid var(--line);
+    background:rgba(21,26,38,.6);backdrop-filter:blur(6px);
+  }
+  header h1{font-size:16px;font-weight:600;letter-spacing:.5px;white-space:nowrap;}
+  header h1 .gold{color:var(--gold);}
+  header .sub{font-size:11px;color:var(--muted);margin-top:2px;}
+  .spacer{flex:1;}
+  .maxset{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap;}
+  .maxset input{
+    width:82px;background:var(--bg1);border:1px solid var(--line);color:var(--gold);
+    padding:6px 8px;border-radius:7px;font-size:12px;text-align:right;outline:none;font-variant-numeric:tabular-nums;
+  }
+  .maxset input:focus{border-color:var(--gold);}
+  .maxset .unit{font-size:10px;}
+  .btn{
+    border:1px solid var(--line);background:var(--panel2);color:var(--txt);
+    padding:7px 14px;border-radius:8px;font-size:12.5px;cursor:pointer;
+    transition:.15s;display:inline-flex;align-items:center;gap:6px;
+  }
+  .btn:hover{border-color:var(--accent);color:#fff;}
+  .btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none;}
+  .btn.primary{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#2a2410;border:0;font-weight:600;}
+  .btn.primary:hover{filter:brightness(1.06);}
+  .btn.ghost:hover{color:#fff;}
+  .btn svg{width:15px;height:15px;}
+
+  main{flex:1;display:flex;min-height:0;}
+
+  #stage{
+    flex:1;position:relative;display:flex;align-items:center;justify-content:center;
+    min-width:0;
+  }
+  canvas{display:block;}
+
+  /* hints */
+  #hint{
+    position:absolute;bottom:12px;left:20px;font-size:11.5px;color:var(--muted);
+    background:rgba(15,18,28,.7);border:1px solid var(--line);border-radius:8px;
+    padding:8px 12px;line-height:1.7;max-width:280px;
+  }
+  #hint b{color:var(--gold);}
+  #selinfo{
+    position:absolute;top:14px;left:20px;font-size:12px;color:var(--gold);
+    background:rgba(15,18,28,.7);border:1px solid var(--line);border-radius:8px;
+    padding:6px 10px;display:none;
+  }
+
+  aside{
+    width:340px;flex-shrink:0;border-left:1px solid var(--line);
+    background:var(--panel);overflow-y:auto;padding:16px 16px 40px;
+  }
+  aside::-webkit-scrollbar{width:8px}
+  aside::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+
+  .section-title{
+    font-size:11px;color:var(--muted);letter-spacing:1.5px;margin:6px 0 10px;
+    text-transform:uppercase;display:flex;align-items:center;gap:8px;
+  }
+  .section-title::after{content:"";flex:1;height:1px;background:var(--line);}
+
+  #addForm{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:18px;}
+  .field{margin-bottom:10px;}
+  .field label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:5px;}
+  .field select,.field input[type=number]{
+    width:100%;background:var(--bg1);border:1px solid var(--line);color:var(--txt);
+    padding:7px 9px;border-radius:7px;font-size:12.5px;outline:none;
+  }
+  .row{display:flex;gap:8px;}
+  .row .field{flex:1;margin-bottom:0;}
+  .segcount-wrap{position:relative;}
+
+  /* ring list */
+  #ringList{display:flex;flex-direction:column;gap:12px;}
+  .ringcard{
+    background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+    padding:11px 12px;transition:.15s;position:relative;
+  }
+  .speed-num{
+    width:62px;background:var(--bg1);border:1px solid var(--line);color:var(--gold);
+    padding:4px 6px;border-radius:6px;font-size:11px;text-align:right;outline:none;
+    font-variant-numeric:tabular-nums;
+  }
+  .speed-num:focus{border-color:var(--gold);}
+  .speed-row .unit{font-size:10px;color:var(--muted);margin-left:2px;}
+  .speed-num::-webkit-outer-spin-button,.speed-num::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .speed-num{-moz-appearance:textfield;appearance:textfield;}
+
+  .ringcard.selected{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset;}
+  .ringcard.hidden{opacity:.5;}
+  .ringcard.centercard{background:linear-gradient(180deg,#20263a,#181d2b);border-color:#3a4258;}
+  .ringcard.centercard .card-name::after{
+    content:"核心";font-size:9px;color:#241f0e;background:var(--gold);
+    border-radius:4px;padding:1px 5px;margin-left:7px;vertical-align:middle;font-weight:700;
+  }
+  .center-swatch{background:conic-gradient(#f5f5f2 0 50%, #15161a 0 100%) !important;}
+  .card-head{display:flex;align-items:center;gap:8px;margin-bottom:9px;}
+  .swatch{width:14px;height:14px;border-radius:50%;border:1px solid rgba(255,255,255,.25);flex-shrink:0;}
+  .card-name{font-size:13px;font-weight:600;}
+  .card-name small{color:var(--muted);font-weight:400;font-size:11px;margin-left:4px;}
+  .card-head .spacer{flex:1;}
+  .iconbtn{
+    border:0;background:transparent;color:var(--muted);cursor:pointer;padding:4px;border-radius:6px;
+    display:inline-flex;transition:.15s;
+  }
+  .iconbtn:hover{color:#fff;background:rgba(255,255,255,.06);}
+  .iconbtn.del:hover{color:var(--danger);}
+  .iconbtn svg{width:16px;height:16px;}
+
+  .dir-toggle{
+    display:flex;background:var(--bg1);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:9px;
+  }
+  .dir-toggle button{
+    flex:1;border:0;background:transparent;color:var(--muted);padding:6px 0;font-size:12px;cursor:pointer;transition:.15s;
+  }
+  .dir-toggle button.on{background:var(--accent);color:#fff;font-weight:600;}
+  .dir-toggle button.on.l{background:linear-gradient(135deg,#5ba0ff,#3f7fe0);}
+  .dir-toggle button.on.r{background:linear-gradient(135deg,#e7a74c,#d9863f);color:#2a1c08;}
+
+  .speed-row{display:flex;align-items:center;gap:8px;margin-bottom:9px;}
+  .speed-row label{font-size:11px;color:var(--muted);white-space:nowrap;}
+  input[type=range]{
+    flex:1;height:4px;-webkit-appearance:none;appearance:none;background:var(--line);border-radius:4px;outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--gold);cursor:pointer;
+    border:2px solid #2a2410;
+  }
+  .speed-val{font-size:11px;color:var(--gold);min-width:34px;text-align:right;font-variant-numeric:tabular-nums;}
+
+  .empty{color:var(--muted);font-size:12px;text-align:center;padding:20px 0;border:1px dashed var(--line);border-radius:10px;}
+
+  #toast{
+    position:fixed;bottom:22px;right:22px;background:#1c2230;border:1px solid var(--ok);
+    color:var(--ok);padding:9px 15px;border-radius:9px;font-size:12.5px;opacity:0;
+    transform:translateY(8px);transition:.25s;z-index:50;
+  }
+  #toast.show{opacity:1;transform:none;}
+
+  @media(max-width:900px){
+    main{flex-direction:column;}
+    aside{width:100%;border-left:0;border-top:1px solid var(--line);max-height:46vh;}
+    #stage{min-height:50vh;}
+    body{overflow:auto;}
+  }
+</style>
+</head>
+<body data-page-node-id="EjFp0W33ug7quPoh3RTEOA">
+<div id="app" data-page-node-id="ZCILcWP71R6AmOjDewmxWp">
+  <header data-page-node-id="JtBNQ41hGkukRGRWZPxSnz">
+    <h1 data-page-node-id="nX7f20trbROO2mfRPh2yAe">☯ 旋转<span class="gold" data-page-node-id="nCzsnJ1Z0MsXfGNFnyPVBQ">太极罗盘</span>控件 <span style="font-size:11px;color:var(--muted);" data-page-node-id="y6SU7xtn0DhdyqWXonro6c">· 初级原型</span></h1>
+    <div class="sub" data-page-node-id="pe7MQdzeqfOqhKOEEzsEUm">中心太极 + 可扩展同心圆环 · 逐环控制转向 / 转速</div>
+    <div class="spacer" data-page-node-id="yl3C7l5J5vxJyuqCZIuzPV"></div>
+    <div class="maxset">
+      <label for="maxSpeedInput">转速上限</label>
+      <input type="number" id="maxSpeedInput" min="360" max="200000" step="60" value="3600">
+      <span class="unit">°/s</span>
+    </div>
+    <button class="btn" id="btnUndo" title="撤销上一步 (Ctrl+Z)">↩ 撤销</button>
+    <button class="btn" id="btnRedo" title="重做 (Ctrl+Y)">↪ 重做</button>
+    <button class="btn" id="btnPlay" data-page-node-id="UqR3Jg80DnHB03A8aij7uz">⏸ 暂停</button>
+    <button class="btn ghost" id="btnResetAll" data-page-node-id="IfI8vxhM5vRWEfJ9Vl6PkM">↺ 全部复位</button>
+    <button class="btn primary" id="btnCenterToggle" data-page-node-id="G2YxUmCtV3V4M90j4EeB6E">⚙ 中心太极</button>
+  </header>
+
+  <main data-page-node-id="kGrCoBfT2gA8iydkAkivyA">
+    <div id="stage" data-page-node-id="Mga6bmn7YPaGncrQozpNyj">
+      <canvas id="cv" data-page-node-id="SmPSb3S85jHGdlDQMTJSsr"></canvas>
+      <div id="selinfo" data-page-node-id="NSsTOfcGyJI9zCK9lO0vFQ"></div>
+      <div id="hint" data-page-node-id="r779izdVxHDSkzRgREsDpX">
+        <b data-page-node-id="MnTuhjTMBWFoNRzdAbBgMO">操作提示</b><br data-page-node-id="kvEHwCKp6AlOJCUP8rCxUW">
+        · 点击任意圆环 → 面板选中并可调<br data-page-node-id="lhnxyQ5had7m5DTbS7pudC">
+        · 右面板「添加圆环」新增一层<br data-page-node-id="ACpxIyxv6FPB7FouOKiLIU">
+        · 每环可独立 顺/逆时针 与 转速<br data-page-node-id="NMvLz1vTLWu4E9Em9AKMm3">
+        · 圆环可 显示/隐藏、删除、锁定<br>
+        · 文字径向排列（字底朝圆心）；「自定义」主题可自填文字，卡片 ✎ 可改字<br>
+        · 回档：Ctrl+Z 撤销 / Ctrl+Y 重做（最多 50 步）
+      </div>
+    </div>
+
+    <aside data-page-node-id="iSCGw9hS2IfPvxXnNLbVLb">
+      <div class="section-title" data-page-node-id="uxojCLrTGwUAJ43XsyhwBO">添加圆环</div>
+      <div id="addForm" data-page-node-id="MFnBdBJVCvCASn4ZQfDyzo">
+        <div class="field" data-page-node-id="UZCzC9r82GUy3nt9boiR3I">
+          <label data-page-node-id="xdzqz2FolCnv6DB2uQk71X">内容主题（决定环上文字）</label>
+          <select id="themeSel" data-page-node-id="9ABKoPbsEvTH2nHByIxIRP">
+            <option value="trigram" data-page-node-id="fsZ9RtneDeP3IVjfvQKgMl">八卦（8 段）</option>
+            <option value="stems" data-page-node-id="9GSWd1SEXTs6oXlrGKbbvl">天干（甲乙丙丁…10 段）</option>
+            <option value="branches" data-page-node-id="pbDRqHDSwZzM3PdjOCU2v7">地支（子丑寅卯…12 段）</option>
+            <option value="mountains">二十四山（24 段）</option>
+            <option value="terms" data-page-node-id="dB8ZNQw3Pz7XXAwbEKWsfZ">二十四节气（24 段）</option>
+            <option value="mansions">二十八宿（28 段）</option>
+            <option value="scale" data-page-node-id="B0urrORNWKmkZRpZI77g0d">数字刻度（N 段）</option>
+            <option value="blank" data-page-node-id="xwCZs7fn7HbpGzZpxZG3eH">空白刻度环（仅刻度线）</option>
+            <option value="custom">自定义（自填文字）</option>
+          </select>
+        </div>
+        <div class="field" id="customLabelsField" style="display:none;margin-top:9px">
+          <label>自定义文字（用逗号/空格分隔，数量即段数）</label>
+          <input type="text" id="customLabels" placeholder="如：东,南,西,北 或 甲 乙 丙 丁">
+        </div>
+        <div class="row" style="margin-top:9px" data-page-node-id="BsUQRGsmrWbrBF47YrPx2k">
+          <div class="field" data-page-node-id="rzPpqEpocmeCpOxWZY80sC">
+            <label data-page-node-id="hw1BOIiW2oTYlyjbPtZC7T">起始转速 (°/s)</label>
+            <input type="number" id="spd" value="24" min="0" max="360" step="1" data-page-node-id="bLnT8YchEv664Ljrvdo7NM">
+          </div>
+          <div class="field" data-page-node-id="JvEUfo9hgXwkmT1nxXR2Hw">
+            <label data-page-node-id="4rOiUJQGGyTTA10tQBiRd6">初始方向</label>
+            <select id="dirSel" data-page-node-id="4mnW1LAVNYM9Wn3b0IH5MP">
+              <option value="1" data-page-node-id="W2K6WNQXuCb9djFRz0p8vM">顺时针 · 右</option>
+              <option value="-1" data-page-node-id="7rPwLhLYeMMd2PtHBEitxx">逆时针 · 左</option>
+            </select>
+          </div>
+          <div class="field segcount-wrap" data-page-node-id="nDIkPiwqwLJW29brUH5MPx">
+            <label data-page-node-id="NKknJOZ4RhCe9xQlaqdBbU">段数(S)</label>
+            <input type="number" id="seg" value="12" min="1" max="360" step="1" data-page-node-id="QTMNwny1kGk9GzfH7ms25w">
+          </div>
+        </div>
+        <button class="btn primary" id="btnAdd" style="width:100%;justify-content:center;margin-top:12px" data-page-node-id="EPP7rbZg5EYVvnEpprysjR">＋ 添加到最外层</button>
+      </div>
+
+      <div class="section-title" data-page-node-id="LZYnuGUHXLaYUCCLlENFXT">圆环列表（点击画布同步选中）</div>
+      <div id="ringList" data-page-node-id="1uGEY6NTHKLTvkhDnb7S9c"></div>
+    </aside>
+  </main>
+</div>
+<div id="toast" data-page-node-id="f0epsPXDD2aedh3j6pONiX"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const TWO_PI = Math.PI*2;
+
+  /* ---------------- 数据模型（主流罗盘：从内到外） ---------------- */
+  const THEMES = {
+    trigram:  { name:"八卦",     segs:8,  labels:["乾","兑","离","震","巽","坎","艮","坤"] },
+    stems:    { name:"天干",     segs:10, labels:["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"] },
+    branches: { name:"地支",     segs:12, labels:["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"] },
+    mountains:{ name:"二十四山", segs:24, labels:["壬","子","癸","丑","艮","寅","甲","卯","乙","辰","巽","巳","丙","午","丁","未","坤","申","庚","酉","辛","戌","乾","亥"] },
+    terms:    { name:"二十四节气",segs:24, labels:["立春","雨水","惊蛰","春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至","小寒","大寒"] },
+    mansions: { name:"二十八宿", segs:28, labels:["角","亢","氐","房","心","尾","箕","斗","牛","女","虚","危","室","壁","奎","娄","胃","昴","毕","觜","参","井","鬼","柳","星","张","翼","轸"] },
+    scale:    { name:"数字刻度", segs:null },
+    blank:    { name:"空白刻度", segs:null },
+    custom:   { name:"自定义",   segs:null },
+  };
+  const PALETTE = [
+    ["#e7c873","#f3dfa0"], // gold
+    ["#6c9bff","#a9c4ff"], // blue
+    ["#5bd0a4","#9effd8"], // teal
+    ["#e0705f","#ffb3a6"], // red
+    ["#b48ce0","#dcc4ff"], // purple
+    ["#f08fb4","#ffcfdf"], // pink
+    ["#e7a74c","#ffd79a"], // orange
+    ["#8fc7e8","#c5e6ff"], // ice
+  ];
+
+  const center = { angle:0, speed:26, dir:1, visible:true, lock:false };
+  let rings = [];
+  let selectedId = null;
+  let playing = true;
+
+  /* 转速上限与滑杆非线性映射：低速精细、高速可达很高 */
+  let SPEED_MAX = 3600;              // °/s，滑杆量程上限（可在顶部「转速上限」自定义）
+  const SPEED_HARD_MAX = 200000;     // 数值框硬上限
+  function speedToSlider(v){ return Math.round(100*Math.pow(Math.max(0,Math.min(v,SPEED_MAX))/SPEED_MAX, 1/2.2)); }
+  function sliderToSpeed(s){ return Math.round(SPEED_MAX*Math.pow(s/100, 2.2)); }
+
+  function makeLabels(theme, segs, customLabels){
+    if(theme==='custom') return (customLabels && customLabels.length)? customLabels.slice() : ['自定义'];
+    if(theme==='scale'){
+      return Array.from({length:segs},(_,i)=> String(i));
+    }
+    if(theme==='blank') return Array.from({length:segs},()=> '');
+    const t = THEMES[theme];
+    return t.labels.slice(0, segs);
+  }
+  function parseLabels(text){
+    return String(text||'').split(/[,，、;；\/|\s]+/).map(s=>s.trim()).filter(Boolean);
+  }
+  function nextColor(){
+    return PALETTE[rings.length % PALETTE.length];
+  }
+  function addRing(opts, silent){
+    const theme = opts.theme;
+    let customLabels = null;
+    if(theme==='custom'){
+      customLabels = parseLabels(opts.customText!=null ? opts.customText : (document.getElementById('customLabels')?document.getElementById('customLabels').value:''));
+      if(customLabels.length===0) customLabels = ['自','定','义'];
+    }
+    let segs = opts.segs;
+    if(THEMES[theme].segs) segs = THEMES[theme].segs;
+    if(theme==='custom') segs = customLabels.length;
+    if(!segs) segs = parseInt(document.getElementById('seg').value,10)||12;
+    const c = opts.color||nextColor();
+    const ring = {
+      id: 'r'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+      theme,
+      segments: segs,
+      labels: makeLabels(theme, segs, customLabels),
+      name: opts.name || THEMES[theme].name + '('+segs+')',
+      color0:c[0], color1:c[1],
+      speed: opts.speed!=null?opts.speed:24,
+      dir: opts.dir!=null?opts.dir:1,
+      angle: Math.random()*360,
+      visible:true, lock:false,
+    };
+    rings.push(ring);
+    selectedId = ring.id;
+    if(!silent) renderPanel();   // 初始化期静默，最后统一渲染，避免 TDZ
+    return ring;
+  }
+
+  /* 预设：主流罗盘从内到外（太极→八卦→天干→地支→二十四节气→二十八宿→刻度） */
+  addRing({theme:'trigram',  name:'内 · 八卦',   speed:14, dir: 1}, true);
+  addRing({theme:'stems',    name:'天干',         speed:18, dir:-1}, true);
+  addRing({theme:'branches', name:'地支',         speed:22, dir: 1}, true);
+  addRing({theme:'terms',    name:'二十四节气',    speed:10, dir:-1}, true);
+  addRing({theme:'mansions', name:'二十八宿',      speed:12, dir: 1}, true);
+  addRing({theme:'scale',    name:'外 · 刻度', segs:36, speed:8, dir: 1}, true);
+
+  /* ---------------- 布局计算 ---------------- */
+  let W=0,H=0,dpr=1;
+  function resize(){
+    const rect = cv.parentElement.getBoundingClientRect();
+    dpr = window.devicePixelRatio||1;
+    W = rect.width; H = rect.height;
+    cv.width = W*dpr; cv.height=H*dpr;
+    cv.style.width=W+'px'; cv.style.height=H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  function layoutRings(){
+    const cx=W/2, cy=H/2;
+    const baseR = Math.min(W,H)*0.44;
+    const centerR = baseR*0.15;
+    const firstGap = baseR*0.05;
+    const ringGap = baseR*0.016;
+    const outerMargin = baseR*0.015;
+    const total = baseR - centerR - firstGap - outerMargin;
+    const n = rings.length;
+    const thickness = n>0 ? (total - ringGap*(n-1))/n : 0;
+    rings.forEach((r,i)=>{
+      r._inner = centerR + firstGap + i*(thickness+ringGap);
+      r._outer = r._inner + thickness;
+      r._mid = (r._inner+r._outer)/2;
+      r._thick = thickness;
+    });
+    return {cx,cy,baseR,centerR,thickness};
+  }
+
+  /* ---------------- 绘制 ---------------- */
+  function drawBackground(cx,cy,baseR){
+    const g = ctx.createRadialGradient(cx,cy,0,cx,cy,baseR*1.08);
+    g.addColorStop(0,'#131826');
+    g.addColorStop(1,'#0a0c12');
+    ctx.fillStyle=g;
+    ctx.fillRect(0,0,W,H);
+    // faint concentric guides
+    ctx.save();
+    ctx.strokeStyle='rgba(120,140,190,0.05)';
+    ctx.lineWidth=1;
+    for(let i=1;i<=6;i++){
+      ctx.beginPath();ctx.arc(cx,cy,baseR*i/6,0,TWO_PI);ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawRing(ring,cx,cy,geo){
+    if(!ring.visible) return;
+    const inner=ring._inner, outer=ring._outer, thick=ring._thick;
+    const rMid=(inner+outer)/2;
+    const rot = ring._rot; // radians
+
+    ctx.save();
+    // annulus base fill（外圈与内圈之间 moveTo 抬笔，避免在正东角度0处产生一条固定连线）
+    ctx.beginPath();
+    ctx.arc(cx,cy,outer,0,TWO_PI);
+    ctx.moveTo(cx+inner,cy);
+    ctx.arc(cx,cy,inner,0,TWO_PI,true);
+    ctx.fillStyle='rgba(255,255,255,0.03)';
+    ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.10)';
+    ctx.lineWidth=1;
+    ctx.stroke();
+    // inner + outer boundary lines (slightly stronger)
+    ctx.strokeStyle='rgba(231,200,115,0.25)';
+    ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(cx,cy,outer,0,TWO_PI);ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,0.10)';
+    ctx.beginPath();ctx.arc(cx,cy,inner,0,TWO_PI);ctx.stroke();
+
+    const N = ring.segments;
+    const segAng = TWO_PI/N;
+    const fontSize = Math.max(9, Math.min(thick*0.62, 13));
+    ctx.font = (ring.theme==='terms'? 'normal ':'600 ')+fontSize+'px "Microsoft YaHei","PingFang SC",sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+
+    for(let k=0;k<N;k++){
+      const base = rot + k*segAng;
+      // spoke line at start of segment
+      const sAng = base;
+      ctx.strokeStyle='rgba(255,255,255,0.10)';
+      ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.moveTo(cx+Math.cos(sAng)*inner, cy+Math.sin(sAng)*inner);
+      ctx.lineTo(cx+Math.cos(sAng)*outer, cy+Math.sin(sAng)*outer);
+      ctx.stroke();
+      // label 随环转动 + 统一径向朝向：字顶朝外、字底朝圆心（站在圆心向外读，方向全环一致，无翻转）
+      const midAng = rot + (k+0.5)*segAng;
+      const label = ring.labels[k];
+      if(label){
+        const lx = cx + Math.cos(midAng)*rMid;
+        const ly = cy + Math.sin(midAng)*rMid;
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.rotate(midAng + Math.PI/2);   // 使字形"下方"对准圆心
+        ctx.fillStyle = (k%2===0)? ring.color0 : ring.color1;
+        ctx.shadowColor = ring.color0;
+        ctx.shadowBlur = 6;
+        ctx.fillText(label, 0, 0);
+        ctx.shadowBlur=0;
+        ctx.restore();
+      }
+    }
+
+    // 选中高亮（画布可见反馈）
+    if(ring.id===selectedId){
+      ctx.strokeStyle='rgba(231,200,115,0.95)';
+      ctx.lineWidth=2;
+      ctx.setLineDash([7,6]);
+      ctx.beginPath();ctx.arc(cx,cy,outer+2.5,0,TWO_PI);ctx.stroke();
+      ctx.beginPath();ctx.arc(cx,cy,inner-2.5,0,TWO_PI);ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+
+  function drawYinYang(cx,cy,R){
+    if(!center.visible) return;
+    // luminous halo
+    const halo=ctx.createRadialGradient(cx,cy,R*0.2,cx,cy,R*1.5);
+    halo.addColorStop(0,'rgba(231,200,115,0.18)');
+    halo.addColorStop(1,'rgba(231,200,115,0)');
+    ctx.fillStyle=halo;
+    ctx.beginPath();ctx.arc(cx,cy,R*1.5,0,TWO_PI);ctx.fill();
+
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate(center._rot);
+    const w='#f5f5f2', b='#15161a';
+    // white base circle
+    ctx.beginPath();ctx.arc(0,0,R,0,TWO_PI);ctx.fillStyle=w;ctx.fill();
+    // black right half
+    ctx.beginPath();ctx.arc(0,0,R,-Math.PI/2,Math.PI/2,false);ctx.fillStyle=b;ctx.fill();
+    // white top semicircle (head)
+    ctx.beginPath();ctx.arc(0,-R/2,R/2,0,TWO_PI);ctx.fillStyle=w;ctx.fill();
+    // black bottom semicircle (head)
+    ctx.beginPath();ctx.arc(0,R/2,R/2,0,TWO_PI);ctx.fillStyle=b;ctx.fill();
+    // dots
+    ctx.beginPath();ctx.arc(0,-R/2,R/6,0,TWO_PI);ctx.fillStyle=b;ctx.fill();
+    ctx.beginPath();ctx.arc(0,R/2,R/6,0,TWO_PI);ctx.fillStyle=w;ctx.fill();
+    // crisp outer ring
+    ctx.beginPath();ctx.arc(0,0,R,0,TWO_PI);ctx.strokeStyle='rgba(255,255,255,0.85)';ctx.lineWidth=Math.max(1,R*0.02);ctx.stroke();
+    ctx.restore();
+  }
+
+  /* ---------------- 主循环 ---------------- */
+  let lastTs=null;
+  function frame(ts){
+    if(!lastTs) lastTs=ts;
+    let dt=(ts-lastTs)/1000;
+    lastTs=ts;
+    if(dt>0.1) dt=0.1;
+    const f = playing ? dt : 0;
+
+    // advance angles (deg->rad)
+    center._rot = (center.angle*Math.PI/180);
+    if(playing){ center.angle += center.speed*center.dir*f; }
+    rings.forEach(r=>{
+      r._rot = r.angle*Math.PI/180;
+      if(playing && !r.lock){ r.angle += r.speed*r.dir*f; } // 锁定环 = 固定不转
+    });
+
+    const geo = layoutRings();
+    const {cx,cy,baseR,centerR}=geo;
+    drawBackground(cx,cy,baseR);
+    rings.forEach(r=> drawRing(r,cx,cy,geo));
+    drawYinYang(cx,cy,centerR);
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------------- 历史快照（撤销/重做，回档） ---------------- */
+  const HISTORY_LIMIT=50;
+  let undoStack=[], redoStack=[];
+  function snapshot(){
+    return JSON.stringify({
+      center:{angle:center.angle,speed:center.speed,dir:center.dir,visible:center.visible,lock:center.lock},
+      rings:rings.map(r=>({id:r.id,theme:r.theme,segments:r.segments,labels:r.labels.slice(),
+        name:r.name,color0:r.color0,color1:r.color1,speed:r.speed,dir:r.dir,angle:r.angle,
+        visible:r.visible,lock:r.lock})),
+      selectedId, speedMax:SPEED_MAX
+    });
+  }
+  function pushHistory(){                 // 在每次"修改前"调用
+    undoStack.push(snapshot());
+    if(undoStack.length>HISTORY_LIMIT) undoStack.shift();
+    redoStack.length=0;                   // 新操作清空重做栈
+    updateUndoBtns();
+  }
+  function restore(json){
+    const s=JSON.parse(json);
+    Object.assign(center,s.center);
+    rings=s.rings;                        // 运行期字段(_inner等)由 layoutRings 每帧重算
+    selectedId=s.selectedId;
+    if(s.speedMax){ SPEED_MAX=s.speedMax; const mi=document.getElementById('maxSpeedInput'); if(mi) mi.value=s.speedMax; }
+    updateCenterBtn();
+    renderPanel();
+  }
+  function undo(){
+    if(!undoStack.length) return;
+    redoStack.push(snapshot());
+    restore(undoStack.pop());
+    updateUndoBtns();
+    toast('已撤销 ↩');
+  }
+  function redo(){
+    if(!redoStack.length) return;
+    undoStack.push(snapshot());
+    restore(redoStack.pop());
+    updateUndoBtns();
+    toast('已重做 ↪');
+  }
+  function updateUndoBtns(){
+    const u=document.getElementById('btnUndo'), r=document.getElementById('btnRedo');
+    if(u) u.disabled = undoStack.length===0;
+    if(r) r.disabled = redoStack.length===0;
+  }
+
+  /* ---------------- 面板渲染 ---------------- */
+  const listEl=document.getElementById('ringList');
+  const selinfoEl=document.getElementById('selinfo');
+
+  function esc(s){return s;}
+
+  function renderPanel(){
+    listEl.innerHTML='';
+    // 中心太极控制卡（始终在最上方）
+    listEl.appendChild(buildCenterCard());
+    if(rings.length===0){
+      const empty=document.createElement('div');
+      empty.className='empty'; empty.textContent='还没有圆环，从上方添加一层吧';
+      listEl.appendChild(empty);
+    }
+    // draw from outermost (reverse) so list shows outer first? keep inner-first order
+    rings.forEach(r=>{
+      const card=document.createElement('div');
+      card.className='ringcard'+(r.id===selectedId?' selected':'')+(r.visible?'':' hidden');
+      card.dataset.id=r.id;
+      card.innerHTML=`
+        <div class="card-head">
+          <span class="swatch" style="background:${r.color0}"></span>
+          <div class="card-name">${r.name}<small>${r.segments} 段 · 半径${Math.round(r._outer||0)}</small></div>
+          <div class="spacer"></div>
+          <button class="iconbtn" data-act="edit" title="编辑该环文字">✎</button>
+          <button class="iconbtn" data-act="lock" title="固定圆环（暂停旋转）">${r.lock?'🔒':'🔓'}</button>
+          <button class="iconbtn" data-act="vis" title="显示/隐藏">${r.visible?'👁':'🚫'}</button>
+          <button class="iconbtn del" data-act="del" title="删除圆环">✕</button>
+        </div>
+        <div class="dir-toggle">
+          <button data-dir="-1" class="${r.dir===-1?'on l':''}">⟲ 逆时针 · 左</button>
+          <button data-dir="1" class="${r.dir===1?'on r':''}">⟳ 顺时针 · 右</button>
+        </div>
+        <div class="speed-row">
+          <label>转速</label>
+          <input type="range" class="spd-range" min="0" max="100" step="1" value="${speedToSlider(r.speed)}">
+          <input type="number" class="speed-num" min="0" max="${SPEED_HARD_MAX}" step="1" value="${r.speed}">
+          <span class="unit">°/s</span>
+        </div>
+        <div class="speed-row" style="justify-content:flex-end;margin-bottom:0">
+          <label style="margin-right:6px">偏移角(°)</label>
+          <input type="range" class="ang-range" min="0" max="360" step="1" value="${Math.round(((r.angle%360)+360)%360)}" style="width:120px;flex:none">
+        </div>
+      `;
+      listEl.appendChild(card);
+
+      // events
+      card.addEventListener('click',(e)=>{
+        if(e.target.closest('[data-act]')||e.target.closest('[data-dir]')||e.target.tagName==='INPUT') return;
+        selectedId=r.id; renderPanel();
+      });
+      card.querySelector('.dir-toggle').addEventListener('click',(e)=>{
+        const b=e.target.closest('[data-dir]'); if(!b)return;
+        if(r.dir!==parseInt(b.dataset.dir,10)) pushHistory();
+        r.dir=parseInt(b.dataset.dir,10); renderPanel();
+      });
+      const spd=card.querySelector('.spd-range');
+      const num=card.querySelector('.speed-num');
+      spd.addEventListener('pointerdown',pushHistory);           // 拖动开始前存档
+      spd.addEventListener('keydown',pushHistory);              // 键盘调滑杆
+      spd.addEventListener('input',()=>{ r.speed=sliderToSpeed(parseInt(spd.value,10)); num.value=r.speed; });
+      num.addEventListener('focus',pushHistory);                // 输入前存档
+      num.addEventListener('input',()=>{ let v=parseInt(num.value,10); if(isNaN(v))v=0; v=Math.max(0,Math.min(SPEED_HARD_MAX,v)); r.speed=v; spd.value=speedToSlider(v); });
+      const ang=card.querySelector('.ang-range');
+      if(ang){ ang.value = ((r.angle%360)+360)%360;
+        ang.addEventListener('pointerdown',pushHistory);
+        ang.addEventListener('keydown',pushHistory);
+        ang.addEventListener('input',()=>{ r.angle=parseInt(ang.value,10); }); }
+      card.querySelector('[data-act=vis]').addEventListener('click',(e)=>{ e.stopPropagation(); pushHistory(); r.visible=!r.visible; renderPanel(); });
+      card.querySelector('[data-act=lock]').addEventListener('click',(e)=>{ e.stopPropagation(); pushHistory(); r.lock=!r.lock; renderPanel(); });
+      card.querySelector('[data-act=del]').addEventListener('click',(e)=>{ e.stopPropagation(); deleteRing(r.id); });
+      card.querySelector('[data-act=edit]').addEventListener('click',(e)=>{
+        e.stopPropagation();
+        const input = window.prompt('编辑该环文字（用逗号/空格分隔，数量即段数）：', r.labels.join(','));
+        if(input==null) return;
+        const labs = parseLabels(input);
+        if(labs.length===0) return;
+        pushHistory();
+        r.labels = labs; r.segments = labs.length; r.theme='custom';
+        renderPanel();
+        toast('已更新该环文字（'+labs.length+' 段）');
+      });
+    });
+
+    // 画布左上角选中信息 + 面板滚动到选中项
+    let infoText=null;
+    if(selectedId==='center'){
+      infoText='已选中：中心太极 · '+(center.dir>0?'顺时针·右':'逆时针·左')+' '+center.speed+'°/s'+(center.visible?'':'（已隐藏）');
+    } else {
+      const sel = rings.find(r=>r.id===selectedId);
+      if(sel) infoText='已选中：'+sel.name+' · '+(sel.dir>0?'顺时针·右':'逆时针·左')+' '+sel.speed+'°/s'+(sel.visible?'':'（已隐藏）');
+    }
+    if(infoText){
+      selinfoEl.style.display='block';
+      selinfoEl.textContent=infoText;
+      const selCard=listEl.querySelector('.ringcard.selected');
+      if(selCard) selCard.scrollIntoView({behavior:'smooth',block:'nearest'});
+    } else {
+      selinfoEl.style.display='none';
+    }
+  }
+
+  /* 中心太极控制卡 */
+  function buildCenterCard(){
+    const card=document.createElement('div');
+    card.className='ringcard centercard'+(selectedId==='center'?' selected':'')+(center.visible?'':' hidden');
+    card.dataset.id='center';
+    card.innerHTML=`
+      <div class="card-head">
+        <span class="swatch center-swatch"></span>
+        <div class="card-name">中心太极<small>Yin-Yang</small></div>
+        <div class="spacer"></div>
+        <button class="iconbtn" data-act="cvis" title="显示/隐藏">${center.visible?'👁':'🚫'}</button>
+      </div>
+      <div class="dir-toggle">
+        <button data-dir="-1" class="${center.dir===-1?'on l':''}">⟲ 逆时针 · 左</button>
+        <button data-dir="1" class="${center.dir===1?'on r':''}">⟳ 顺时针 · 右</button>
+      </div>
+      <div class="speed-row">
+        <label>转速</label>
+        <input type="range" class="spd-range" min="0" max="100" step="1" value="${speedToSlider(center.speed)}">
+        <input type="number" class="speed-num" min="0" max="${SPEED_HARD_MAX}" step="1" value="${center.speed}">
+        <span class="unit">°/s</span>
+      </div>
+      <div class="speed-row" style="justify-content:flex-end;margin-bottom:0">
+        <label style="margin-right:6px">偏移角(°)</label>
+        <input type="range" class="ang-range" min="0" max="360" step="1" value="${Math.round(((center.angle%360)+360)%360)}" style="width:120px;flex:none">
+      </div>
+    `;
+    card.addEventListener('click',(e)=>{
+      if(e.target.closest('[data-act]')||e.target.closest('[data-dir]')||e.target.tagName==='INPUT') return;
+      selectedId='center'; renderPanel();
+    });
+    card.querySelector('.dir-toggle').addEventListener('click',(e)=>{
+      const b=e.target.closest('[data-dir]'); if(!b)return;
+      if(center.dir!==parseInt(b.dataset.dir,10)) pushHistory();
+      center.dir=parseInt(b.dataset.dir,10); renderPanel();
+    });
+    const spd=card.querySelector('.spd-range');
+    const num=card.querySelector('.speed-num');
+    spd.addEventListener('pointerdown',pushHistory);
+    spd.addEventListener('keydown',pushHistory);
+    spd.addEventListener('input',()=>{ center.speed=sliderToSpeed(parseInt(spd.value,10)); num.value=center.speed; });
+    num.addEventListener('focus',pushHistory);
+    num.addEventListener('input',()=>{ let v=parseInt(num.value,10); if(isNaN(v))v=0; v=Math.max(0,Math.min(SPEED_HARD_MAX,v)); center.speed=v; spd.value=speedToSlider(v); });
+    const ang=card.querySelector('.ang-range');
+    if(ang){ ang.addEventListener('pointerdown',pushHistory);
+      ang.addEventListener('keydown',pushHistory);
+      ang.addEventListener('input',()=>{ center.angle=parseInt(ang.value,10); }); }
+    card.querySelector('[data-act=cvis]').addEventListener('click',(e)=>{ e.stopPropagation(); toggleCenterVisible(); renderPanel(); });
+    return card;
+  }
+
+  function toggleCenterVisible(){
+    center.visible=!center.visible;
+    updateCenterBtn();
+  }
+  function updateCenterBtn(){
+    btnCenterToggle.textContent= center.visible?'⚙ 中心太极':'⚙ 中心隐藏';
+    btnCenterToggle.style.opacity=center.visible?'1':'.6';
+  }
+
+  function deleteRing(id){
+    const idx=rings.findIndex(r=>r.id===id);
+    if(idx<0)return;
+    pushHistory();
+    rings.splice(idx,1);
+    if(selectedId===id) selectedId=rings.length?rings[rings.length-1].id:null;
+    renderPanel();
+    toast('已删除圆环');
+  }
+
+  /* canvas click -> select ring */
+  cv.addEventListener('click',(e)=>{
+    const rect=cv.getBoundingClientRect();
+    const x=e.clientX-rect.left, y=e.clientY-rect.top;
+    const geo=layoutRings();
+    const d=Math.hypot(x-geo.cx,y-geo.cy);
+    // 点中中心太极
+    if(d<=geo.centerR){ selectedId='center'; renderPanel(); return; }
+    // check rings from outermost inward
+    for(let i=rings.length-1;i>=0;i--){
+      const r=rings[i];
+      if(d>=r._inner && d<=r._outer){ selectedId=r.id; renderPanel(); return; }
+    }
+  });
+
+  /* ---------------- 全局控制 ---------------- */
+  const btnPlay=document.getElementById('btnPlay');
+  function togglePlay(){
+    playing=!playing;
+    btnPlay.textContent= playing?'⏸ 暂停':'▶ 播放';
+  }
+  btnPlay.addEventListener('click',togglePlay);
+
+  document.getElementById('btnResetAll').addEventListener('click',()=>{
+    // 复位：所有角度归零、全部显示，中心恢复默认转速/方向（保留各环已设转速与方向）
+    pushHistory();
+    center.angle=0; center.speed=26; center.dir=1; center.visible=true;
+    rings.forEach(r=>{ r.angle=0; r.visible=true; });
+    updateCenterBtn();
+    renderPanel();
+  });
+
+  const btnCenterToggle=document.getElementById('btnCenterToggle');
+  btnCenterToggle.addEventListener('click',()=>{ pushHistory(); toggleCenterVisible(); renderPanel(); });
+
+  document.getElementById('btnAdd').addEventListener('click',()=>{
+    const theme=document.getElementById('themeSel').value;
+    const spd=parseInt(document.getElementById('spd').value,10)||0;
+    const dir=parseInt(document.getElementById('dirSel').value,10);
+    const seg=parseInt(document.getElementById('seg').value,10);
+    pushHistory();
+    addRing({theme, speed:spd, dir});
+    toast('已新增：'+THEMES[theme].name);
+  });
+
+  // theme change -> suggest segment count + show/hide custom labels field
+  document.getElementById('themeSel').addEventListener('change',(e)=>{
+    const v=e.target.value;
+    const t=THEMES[v];
+    if(t.segs) document.getElementById('seg').value=t.segs;
+    const cf=document.getElementById('customLabelsField');
+    if(cf) cf.style.display = (v==='custom')?'block':'none';
+  });
+
+  // 自定义转速上限：改变所有滑杆量程（各环已设实际速度不变，仅重新映射）
+  const maxSpeedInput=document.getElementById('maxSpeedInput');
+  maxSpeedInput.addEventListener('change',()=>{
+    let v=parseInt(maxSpeedInput.value,10);
+    if(isNaN(v)) v=3600;
+    v=Math.max(360, Math.min(SPEED_HARD_MAX, v));
+    if(v!==SPEED_MAX) pushHistory();
+    SPEED_MAX=v;
+    maxSpeedInput.value=v;
+    renderPanel();
+    toast('转速上限已设为 '+v+'°/s');
+  });
+
+  /* toast */
+  let toastTimer=null;
+  const toastEl=document.getElementById('toast');
+  function toast(msg){
+    toastEl.textContent=msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>toastEl.classList.remove('show'),1400);
+  }
+
+  /* keyboard */
+  window.addEventListener('keydown',(e)=>{
+    if(e.code==='Space'){ e.preventDefault(); togglePlay(); }
+    // 撤销/重做：输入框内不拦截（保留原生文本编辑）
+    const t=e.target;
+    if(t && (t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='TEXTAREA'||t.isContentEditable)) return;
+    if((e.ctrlKey||e.metaKey) && !e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
+    else if((e.ctrlKey||e.metaKey) && (e.key.toLowerCase()==='y' || (e.shiftKey && e.key.toLowerCase()==='z'))){ e.preventDefault(); redo(); }
+  });
+
+  // 撤销/重做按钮
+  document.getElementById('btnUndo').addEventListener('click',undo);
+  document.getElementById('btnRedo').addEventListener('click',redo);
+  updateUndoBtns();
+  window.addEventListener('resize',()=>{ resize(); });
+  resize();
+  renderPanel();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
