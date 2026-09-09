@@ -268,6 +268,7 @@
           <label data-page-node-id="xdzqz2FolCnv6DB2uQk71X">内容主题（决定环上文字）</label>
           <select id="themeSel" data-page-node-id="9ABKoPbsEvTH2nHByIxIRP">
             <option value="trigram" data-page-node-id="fsZ9RtneDeP3IVjfvQKgMl">八卦（8 段）</option>
+            <option value="trigramSym">八卦符号（☰☱☲☳…8 段，白色大字）</option>
             <option value="stems" data-page-node-id="9GSWd1SEXTs6oXlrGKbbvl">天干（甲乙丙丁…10 段）</option>
             <option value="branches" data-page-node-id="pbDRqHDSwZzM3PdjOCU2v7">地支（子丑寅卯…12 段）</option>
             <option value="mountains">二十四山（24 段）</option>
@@ -320,6 +321,7 @@
   /* ---------------- 数据模型（主流罗盘：从内到外） ---------------- */
   const THEMES = {
     trigram:  { name:"八卦",     segs:8,  labels:["乾","兑","离","震","巽","坎","艮","坤"] },
+    trigramSym:{ name:"八卦符号", segs:8,  labels:["☰","☱","☲","☳","☴","☵","☶","☷"] },
     stems:    { name:"天干",     segs:10, labels:["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"] },
     branches: { name:"地支",     segs:12, labels:["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"] },
     mountains:{ name:"二十四山", segs:24, labels:["壬","子","癸","丑","艮","寅","甲","卯","乙","辰","巽","巳","丙","午","丁","未","坤","申","庚","酉","辛","戌","乾","亥"] },
@@ -398,7 +400,7 @@
 
   /* 预设：主流罗盘从内到外（太极→八卦→天干→地支→二十四节气→二十八宿→刻度） */
   addRing({theme:'trigram',  name:'内 · 八卦',   speed:14, dir: 1}, true);
-  addRing({theme:'stems',    name:'天干',         speed:18, dir:-1}, true);
+  addRing({theme:'trigramSym',name:'八卦符号',     speed:18, dir:-1}, true);
   addRing({theme:'branches', name:'地支',         speed:22, dir: 1}, true);
   addRing({theme:'terms',    name:'二十四节气',    speed:10, dir:-1}, true);
   addRing({theme:'mansions', name:'二十八宿',      speed:12, dir: 1}, true);
@@ -478,8 +480,12 @@
 
     const N = ring.segments;
     const segAng = TWO_PI/N;
-    const fontSize = Math.max(9, Math.min(thick*0.62, 13));
-    ctx.font = (ring.theme==='terms'? 'normal ':'600 ')+fontSize+'px "Microsoft YaHei","PingFang SC",sans-serif';
+    // 卦象符号环：字放大占满格（受环厚与格宽双重限制），纯白无描边
+    const isSym = ring.theme==='trigramSym';
+    const fontSize = isSym
+      ? Math.max(12, Math.min(thick*0.92, rMid*segAng*0.8))
+      : Math.max(9, Math.min(thick*0.62, 13));
+    ctx.font = (isSym? 'normal ' : (ring.theme==='terms'? 'normal ':'600 '))+fontSize+'px "Segoe UI Symbol","Microsoft YaHei","PingFang SC",sans-serif';
     ctx.textAlign='center';
     ctx.textBaseline='middle';
 
@@ -502,9 +508,9 @@
         ctx.save();
         ctx.translate(lx, ly);
         ctx.rotate(midAng + Math.PI/2);   // 使字形"下方"对准圆心
-        ctx.fillStyle = (k%2===0)? ring.color0 : ring.color1;
-        ctx.shadowColor = ring.color0;
-        ctx.shadowBlur = 6;
+        ctx.fillStyle = isSym ? '#ffffff' : ((k%2===0)? ring.color0 : ring.color1);
+        ctx.shadowColor = isSym ? 'rgba(255,255,255,.6)' : ring.color0;
+        ctx.shadowBlur = isSym ? 3 : 6;
         ctx.fillText(label, 0, 0);
         ctx.shadowBlur=0;
         ctx.restore();
