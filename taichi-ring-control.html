@@ -1,35 +1,72 @@
 <!DOCTYPE html>
+<!--
+============================================================================
+ 旋转太极罗盘控件 · 初级原型（单文件版）
+----------------------------------------------------------------------------
+ 【功能】
+   中心太极 + 多层同心圆环，每层环可独立控制：转向（顺/逆）、转速、
+   偏移角、显示/隐藏、锁定（固定不转）、编辑文字、删除、添加新环。
+   支持撤销/重做（Ctrl+Z / Ctrl+Y，最多 50 步）、全屏、顶栏/侧栏收起。
+
+ 【文件结构】
+   1. <style>  样式（CSS 变量定义调色板 → 布局 → 各组件）
+   2. <body>   页面结构（顶栏 → 画布舞台 → 拖拽条 → 右侧操作台）
+   3. script 标签内是全部逻辑，按功能分块：
+      - 数据模型（THEMES 主题表 / PALETTE 配色 / 状态变量）
+      - 转速映射（滑杆非线性）
+      - 环的创建 addRing / 预设环
+      - 布局计算 resize / layoutRings（环半径、内外相接）
+      - 绘制 drawBackground / drawRing / drawYinYang
+      - 主循环 frame（角度推进 + 重绘）
+      - 撤销/重做（快照式）
+      - 面板渲染 renderPanel（右侧卡片列表）
+      - 交互（画布点击选中 / 全局按钮 / 快捷键 / 面板折叠拖拽 / 提示条 / 顶栏 / 全屏）
+
+ 【常见修改入口】
+   · 改默认环（层数/顺序/速度/方向）  → 搜 “预设：主流罗盘”
+   · 改某主题的文字                   → 搜 “const THEMES”
+   · 改环的文字颜色池                 → 搜 “const PALETTE”
+   · 改环间距 / 是否内外相接           → 搜 “firstGap / ringGap”
+   · 改环上文字大小                    → 搜 “fontSize”（drawRing 内）
+   · 改撤销步数上限                    → 搜 “HISTORY_LIMIT”
+============================================================================
+-->
 <html lang="zh-CN" data-page-node-id="YKcOQwmNm74mM09gndxA6d">
 <head data-page-node-id="WzGcWSE7modKnB17DbXlwO">
 <meta charset="utf-8" data-page-node-id="vjKakfFyZ4nG0EIJbKaJLL" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="rU7yR1t0kiO7HOiChdaGxp" />
 <title>旋转太极罗盘控件 · 初级原型</title>
 <style>
+  /* ================= 主题变量：统一调色板（改颜色先改这里） ================= */
   :root{
-    --bg1:#0a0c12;
+    --bg1:#0a0c12;      /* 页面底色（深） */
     --bg2:#11151f;
-    --panel:#151a26;
-    --panel2:#1c2230;
-    --line:#2a3245;
-    --txt:#dfe5f1;
-    --muted:#8a93a8;
-    --gold:#e7c873;
+    --panel:#151a26;    /* 侧栏背景 */
+    --panel2:#1c2230;   /* 卡片背景 */
+    --line:#2a3245;     /* 边框/分隔线 */
+    --txt:#dfe5f1;      /* 正文文字 */
+    --muted:#8a93a8;    /* 次要文字 */
+    --gold:#e7c873;     /* 主强调色（金） */
     --gold2:#f3dfa0;
-    --accent:#6c9bff;
-    --danger:#e0705f;
-    --ok:#5bd0a4;
+    --accent:#6c9bff;   /* 悬停强调（蓝） */
+    --danger:#e0705f;   /* 危险（删除） */
+    --ok:#5bd0a4;       /* 成功提示 */
   }
+
+  /* ================= 全局与整体布局 ================= */
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;}
   body{
     font-family:"Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
     color:var(--txt);
     background:radial-gradient(1200px 800px at 30% 20%, #182032, var(--bg1));
-    overflow:hidden;
+    overflow:hidden;   /* 桌面端整页不滚动，滚动只发生在侧栏内部 */
   }
-  #app{display:flex;flex-direction:column;height:100vh;}
+  #app{display:flex;flex-direction:column;height:100vh;}   /* 顶栏 + 主区 纵向排列 */
+
+  /* ================= 顶栏 ================= */
   header{
-    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;  /* 按钮多时允许换行，避免被挤出可视区 */
     padding:12px 20px;border-bottom:1px solid var(--line);
     background:rgba(21,26,38,.6);backdrop-filter:blur(6px);
   }
@@ -37,7 +74,9 @@
   header h1{font-size:16px;font-weight:600;letter-spacing:.5px;white-space:nowrap;}
   header h1 .gold{color:var(--gold);}
   header .sub{font-size:11px;color:var(--muted);margin-top:2px;}
-  .spacer{flex:1;}
+  .spacer{flex:1;}   /* 弹簧：把后面的按钮推到右侧 */
+
+  /* 顶栏「转速上限」数字框 */
   .maxset{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap;}
   .maxset input{
     width:82px;background:var(--bg1);border:1px solid var(--line);color:var(--gold);
@@ -45,6 +84,8 @@
   }
   .maxset input:focus{border-color:var(--gold);}
   .maxset .unit{font-size:10px;}
+
+  /* ================= 通用按钮 ================= */
   .btn{
     border:1px solid var(--line);background:var(--panel2);color:var(--txt);
     padding:7px 14px;border-radius:8px;font-size:12.5px;cursor:pointer;
@@ -52,12 +93,13 @@
   }
   .btn:hover{border-color:var(--accent);color:#fff;}
   .btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none;}
-  .btn.primary{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#2a2410;border:0;font-weight:600;}
+  .btn.primary{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#2a2410;border:0;font-weight:600;}   /* 主按钮（金色） */
   .btn.primary:hover{filter:brightness(1.06);}
   .btn.ghost:hover{color:#fff;}
   .btn svg{width:15px;height:15px;}
 
-  main{flex:1;display:flex;min-height:0;}
+  /* ================= 主区：画布舞台 ================= */
+  main{flex:1;display:flex;min-height:0;}   /* 横向：舞台 + 拖拽条 + 侧栏 */
 
   #stage{
     flex:1;position:relative;display:flex;align-items:center;justify-content:center;
@@ -65,7 +107,7 @@
   }
   canvas{display:block;}
 
-  /* hints */
+  /* ================= 左下角操作提示条（可隐藏 + 可恢复） ================= */
   #hint{
     position:absolute;bottom:12px;left:20px;font-size:11.5px;color:var(--muted);
     background:rgba(15,18,28,.7);border:1px solid var(--line);border-radius:8px;
@@ -84,57 +126,63 @@
     font-size:11.5px;padding:5px 10px;border-radius:8px;cursor:pointer;
   }
   #hintShow:hover{color:#fff;border-color:var(--accent);}
-  /* 左上角「已选中」信息条：默认隐藏，不再显示 */
+
+  /* 左上角「已选中」信息条：默认隐藏，不再显示（保留节点备用） */
   #selinfo{
     position:absolute;top:14px;left:20px;font-size:12px;color:var(--gold);
     background:rgba(15,18,28,.7);border:1px solid var(--line);border-radius:8px;
     padding:6px 10px;display:none !important;
   }
-  /* 顶栏可收缩 + 收起后的展开按钮 */
+
+  /* ================= 顶栏可收缩 + 收起后的「⌄ 顶栏」按钮 ================= */
   header.collapsed{display:none;}
   #headerShow{
     position:fixed;top:8px;right:14px;left:auto;z-index:40;display:none;cursor:pointer;
     background:rgba(15,18,28,.78);border:1px solid var(--line);color:var(--muted);
     font-size:11.5px;padding:5px 10px;border-radius:8px;
-    transition:right .18s ease;
+    transition:right .18s ease;   /* right 由 JS 按操作台宽度动态计算，过渡使其平滑滑动 */
   }
   #headerShow:hover{color:#fff;border-color:var(--accent);}
   /* 顶栏收起时，把画布右上「面板」按钮下移，避免与「展开顶栏」重叠 */
   body.hdr-collapsed #panelToggle{top:52px;}
 
+  /* ================= 右侧操作台（可折叠 / 可拖拽调宽） ================= */
   aside{
     width:340px;flex-shrink:0;border-left:1px solid var(--line);
     background:var(--panel);overflow-y:auto;padding:16px 16px 40px;
-    transition:width .18s ease,padding .18s ease;
+    transition:width .18s ease,padding .18s ease;   /* 宽度过渡动画（JS 会在动画结束后重算画布） */
   }
   aside::-webkit-scrollbar{width:8px}
   aside::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
   /* 右侧面板：可折叠 / 可拖拽调宽 */
   aside.collapsed{width:0;padding-left:0;padding-right:0;border-left:0;overflow:hidden;}
   #resizer{
-    flex:0 0 5px;width:5px;cursor:col-resize;background:transparent;
+    flex:0 0 5px;width:5px;cursor:col-resize;background:transparent;   /* 舞台与侧栏之间的拖拽分隔条 */
     transition:background .15s;
   }
   #resizer:hover,#resizer.dragging{background:linear-gradient(180deg,rgba(231,200,115,.55),rgba(231,200,115,.12));}
   aside.collapsed + #resizer,#resizer.hidden{display:none;}
   #panelToggle{
-    position:absolute;top:12px;right:14px;z-index:6;
+    position:absolute;top:12px;right:14px;z-index:6;   /* 画布右上角「▤ 面板」按钮 */
     background:rgba(15,18,28,.78);border:1px solid var(--line);color:var(--muted);
     font-size:12px;padding:5px 9px;border-radius:8px;cursor:pointer;
   }
   #panelToggle:hover{color:#fff;border-color:var(--accent);}
-  /* 卡片折叠 */
+
+  /* ================= 卡片折叠（每张环卡片的 ▾ 按钮） ================= */
   .card-body{overflow:hidden;}
   .ringcard.folded .card-body{display:none;}
   .iconbtn.fold .chev{display:inline-block;transition:transform .15s;}
   .ringcard.folded .iconbtn.fold .chev{transform:rotate(-90deg);}
 
+  /* ================= 侧栏区块标题（添加圆环 / 圆环列表） ================= */
   .section-title{
     font-size:11px;color:var(--muted);letter-spacing:1.5px;margin:6px 0 10px;
     text-transform:uppercase;display:flex;align-items:center;gap:8px;
   }
-  .section-title::after{content:"";flex:1;height:1px;background:var(--line);}
+  .section-title::after{content:"";flex:1;height:1px;background:var(--line);}   /* 标题后的细线 */
 
+  /* ================= 「添加圆环」表单 ================= */
   #addForm{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:18px;}
   .field{margin-bottom:10px;}
   .field label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:5px;}
@@ -142,16 +190,17 @@
     width:100%;background:var(--bg1);border:1px solid var(--line);color:var(--txt);
     padding:7px 9px;border-radius:7px;font-size:12.5px;outline:none;
   }
-  .row{display:flex;gap:8px;}
+  .row{display:flex;gap:8px;}   /* 转速/方向/段数 三栏一行 */
   .row .field{flex:1;margin-bottom:0;}
   .segcount-wrap{position:relative;}
 
-  /* ring list */
+  /* ================= 圆环卡片列表 ================= */
   #ringList{display:flex;flex-direction:column;gap:12px;}
   .ringcard{
     background:var(--panel2);border:1px solid var(--line);border-radius:12px;
     padding:11px 12px;transition:.15s;position:relative;
   }
+  /* 转速数字框（隐藏原生上下箭头） */
   .speed-num{
     width:62px;background:var(--bg1);border:1px solid var(--line);color:var(--gold);
     padding:4px 6px;border-radius:6px;font-size:11px;text-align:right;outline:none;
@@ -162,14 +211,18 @@
   .speed-num::-webkit-outer-spin-button,.speed-num::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
   .speed-num{-moz-appearance:textfield;appearance:textfield;}
 
-  .ringcard.selected{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset;}
-  .ringcard.hidden{opacity:.5;}
+  .ringcard.selected{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset;}   /* 选中描金边 */
+  .ringcard.hidden{opacity:.5;}   /* 已隐藏的环：卡片半透明 */
+
+  /* 中心太极卡片：深渐变底 + “核心”角标 */
   .ringcard.centercard{background:linear-gradient(180deg,#20263a,#181d2b);border-color:#3a4258;}
   .ringcard.centercard .card-name::after{
     content:"核心";font-size:9px;color:#241f0e;background:var(--gold);
     border-radius:4px;padding:1px 5px;margin-left:7px;vertical-align:middle;font-weight:700;
   }
-  .center-swatch{background:conic-gradient(#f5f5f2 0 50%, #15161a 0 100%) !important;}
+  .center-swatch{background:conic-gradient(#f5f5f2 0 50%, #15161a 0 100%) !important;}   /* 太极色块：黑白各半 */
+
+  /* 卡片头部：色块 + 名称 + 操作按钮 */
   .card-head{display:flex;align-items:center;gap:8px;margin-bottom:9px;}
   .swatch{width:14px;height:14px;border-radius:50%;border:1px solid rgba(255,255,255,.25);flex-shrink:0;}
   .card-name{font-size:13px;font-weight:600;}
@@ -183,6 +236,7 @@
   .iconbtn.del:hover{color:var(--danger);}
   .iconbtn svg{width:16px;height:16px;}
 
+  /* 方向切换（左=逆时针 / 右=顺时针） */
   .dir-toggle{
     display:flex;background:var(--bg1);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:9px;
   }
@@ -190,9 +244,10 @@
     flex:1;border:0;background:transparent;color:var(--muted);padding:6px 0;font-size:12px;cursor:pointer;transition:.15s;
   }
   .dir-toggle button.on{background:var(--accent);color:#fff;font-weight:600;}
-  .dir-toggle button.on.l{background:linear-gradient(135deg,#5ba0ff,#3f7fe0);}
-  .dir-toggle button.on.r{background:linear-gradient(135deg,#e7a74c,#d9863f);color:#2a1c08;}
+  .dir-toggle button.on.l{background:linear-gradient(135deg,#5ba0ff,#3f7fe0);}              /* 逆时针选中=蓝 */
+  .dir-toggle button.on.r{background:linear-gradient(135deg,#e7a74c,#d9863f);color:#2a1c08;} /* 顺时针选中=橙 */
 
+  /* 转速行（滑杆 + 数字框） */
   .speed-row{display:flex;align-items:center;gap:8px;margin-bottom:9px;}
   .speed-row label{font-size:11px;color:var(--muted);white-space:nowrap;}
   input[type=range]{
@@ -206,6 +261,7 @@
 
   .empty{color:var(--muted);font-size:12px;text-align:center;padding:20px 0;border:1px dashed var(--line);border-radius:10px;}
 
+  /* ================= 右下角 toast 提示 ================= */
   #toast{
     position:fixed;bottom:22px;right:22px;background:#1c2230;border:1px solid var(--ok);
     color:var(--ok);padding:9px 15px;border-radius:9px;font-size:12.5px;opacity:0;
@@ -213,6 +269,7 @@
   }
   #toast.show{opacity:1;transform:none;}
 
+  /* ================= 窄屏适配：侧栏移到下方 ================= */
   @media(max-width:900px){
     main{flex-direction:column;}
     aside{width:100%;border-left:0;border-top:1px solid var(--line);max-height:46vh;}
@@ -223,10 +280,13 @@
 </head>
 <body data-page-node-id="EjFp0W33ug7quPoh3RTEOA">
 <div id="app" data-page-node-id="ZCILcWP71R6AmOjDewmxWp">
+
+  <!-- ===== 顶栏：标题 + 转速上限 + 全局按钮（全屏/暂停/复位/中心太极/收起顶栏） ===== -->
   <header data-page-node-id="JtBNQ41hGkukRGRWZPxSnz">
     <h1 data-page-node-id="nX7f20trbROO2mfRPh2yAe">☯ 旋转<span class="gold" data-page-node-id="nCzsnJ1Z0MsXfGNFnyPVBQ">太极罗盘</span>控件 <span style="font-size:11px;color:var(--muted);" data-page-node-id="y6SU7xtn0DhdyqWXonro6c">· 初级原型</span></h1>
     <div class="sub" data-page-node-id="pe7MQdzeqfOqhKOEEzsEUm">中心太极 + 可扩展同心圆环 · 逐环控制转向 / 转速</div>
     <div class="spacer" data-page-node-id="yl3C7l5J5vxJyuqCZIuzPV"></div>
+    <!-- 转速上限：改变所有卡片滑杆的量程（各环实际速度不变，仅重新映射） -->
     <div class="maxset">
       <label for="maxSpeedInput">转速上限</label>
       <input type="number" id="maxSpeedInput" min="360" max="200000" step="60" value="3600">
@@ -238,14 +298,17 @@
     <button class="btn primary" id="btnCenterToggle" data-page-node-id="G2YxUmCtV3V4M90j4EeB6E">⚙ 中心太极</button>
     <button class="btn ghost" id="btnHeaderToggle" title="收起/展开顶栏">⌃ 收起顶栏</button>
   </header>
+  <!-- 顶栏收起后显示的小按钮（位置由 JS 的 syncHeaderShowPos 按操作台宽度计算） -->
   <button id="headerShow" title="展开顶栏">⌄ 顶栏</button>
 
   <main data-page-node-id="kGrCoBfT2gA8iydkAkivyA">
+    <!-- ===== 画布舞台 ===== -->
     <div id="stage" data-page-node-id="Mga6bmn7YPaGncrQozpNyj">
       <canvas id="cv" data-page-node-id="SmPSb3S85jHGdlDQMTJSsr"></canvas>
       <div id="selinfo" data-page-node-id="NSsTOfcGyJI9zCK9lO0vFQ"></div>
       <button id="panelToggle" title="折叠/展开右侧操作台">‹ 展开</button>
       <button id="hintShow" title="显示操作提示" style="display:block">? 操作提示</button>
+      <!-- 左下角操作提示（默认隐藏，点「? 操作提示」恢复） -->
       <div id="hint" data-page-node-id="r779izdVxHDSkzRgREsDpX" style="display:none">
         <button class="hint-x" id="hintClose" title="隐藏提示">✕</button>
         <b data-page-node-id="MnTuhjTMBWFoNRzdAbBgMO">操作提示</b><br data-page-node-id="kvEHwCKp6AlOJCUP8rCxUW">
@@ -259,13 +322,17 @@
       </div>
     </div>
 
+    <!-- 舞台与侧栏之间的拖拽分隔条 -->
     <div id="resizer" title="拖动调整操作台宽度"></div>
 
+    <!-- ===== 右侧操作台（默认折叠） ===== -->
     <aside class="collapsed" data-page-node-id="iSCGw9hS2IfPvxXnNLbVLb">
       <div class="section-title" data-page-node-id="uxojCLrTGwUAJ43XsyhwBO">添加圆环</div>
+      <!-- 「添加圆环」表单：主题 / 自定义文字 / 起始转速 / 初始方向 / 段数 -->
       <div id="addForm" data-page-node-id="MFnBdBJVCvCASn4ZQfDyzo">
         <div class="field" data-page-node-id="UZCzC9r82GUy3nt9boiR3I">
           <label data-page-node-id="xdzqz2FolCnv6DB2uQk71X">内容主题（决定环上文字）</label>
+          <!-- 新增主题时需同时在 JS 的 THEMES 里登记 -->
           <select id="themeSel" data-page-node-id="9ABKoPbsEvTH2nHByIxIRP">
             <option value="trigram" data-page-node-id="fsZ9RtneDeP3IVjfvQKgMl">八卦（8 段）</option>
             <option value="trigramSym">八卦符号（☰☱☲☳…8 段，白色大字）</option>
@@ -279,6 +346,7 @@
             <option value="custom">自定义（自填文字）</option>
           </select>
         </div>
+        <!-- 仅「自定义」主题时显示 -->
         <div class="field" id="customLabelsField" style="display:none;margin-top:9px">
           <label>自定义文字（用逗号/空格分隔，数量即段数）</label>
           <input type="text" id="customLabels" placeholder="如：东,南,西,北 或 甲 乙 丙 丁">
@@ -304,6 +372,7 @@
       </div>
 
       <div class="section-title" data-page-node-id="LZYnuGUHXLaYUCCLlENFXT">圆环列表（点击画布同步选中）</div>
+      <!-- 卡片由 JS 的 renderPanel() 动态生成 -->
       <div id="ringList" data-page-node-id="1uGEY6NTHKLTvkhDnb7S9c"></div>
     </aside>
   </main>
@@ -319,18 +388,28 @@
   const TWO_PI = Math.PI*2;
 
   /* ---------------- 数据模型（主流罗盘：从内到外） ---------------- */
+  /*
+   * THEMES：内置主题表。每个主题 = { 显示名, 固定段数, 文字标签 }
+   *   segs 为 null 表示段数由用户输入（scale/blank）或由文字数量决定（custom）。
+   *   新增主题步骤：① 这里加一条 ② 顶栏 <select id="themeSel"> 加 <option>
+   *   ③ 如需特殊绘制（大字/纯色）在 drawRing() 里按 theme 分支处理。
+   */
   const THEMES = {
     trigram:  { name:"八卦",     segs:8,  labels:["乾","兑","离","震","巽","坎","艮","坤"] },
-    trigramSym:{ name:"八卦符号", segs:8,  labels:["☰","☱","☲","☳","☴","☵","☶","☷"] },
+    trigramSym:{ name:"八卦符号", segs:8,  labels:["☰","☱","☲","☳","☴","☵","☶","☷"] },   // 特殊绘制：白色大字占满格（见 drawRing 的 isSym 分支）
     stems:    { name:"天干",     segs:10, labels:["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"] },
     branches: { name:"地支",     segs:12, labels:["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"] },
     mountains:{ name:"二十四山", segs:24, labels:["壬","子","癸","丑","艮","寅","甲","卯","乙","辰","巽","巳","丙","午","丁","未","坤","申","庚","酉","辛","戌","乾","亥"] },
     terms:    { name:"二十四节气",segs:24, labels:["立春","雨水","惊蛰","春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至","小寒","大寒"] },
     mansions: { name:"二十八宿", segs:28, labels:["角","亢","氐","房","心","尾","箕","斗","牛","女","虚","危","室","壁","奎","娄","胃","昴","毕","觜","参","井","鬼","柳","星","张","翼","轸"] },
-    scale:    { name:"数字刻度", segs:null },
-    blank:    { name:"空白刻度", segs:null },
-    custom:   { name:"自定义",   segs:null },
+    scale:    { name:"数字刻度", segs:null },   // 标签 = 0..N-1
+    blank:    { name:"空白刻度", segs:null },   // 只有刻度线，无文字
+    custom:   { name:"自定义",   segs:null },   // 用户自填文字，数量即段数
   };
+  /*
+   * PALETTE：环文字配色池（主色 + 浅色），按环的创建顺序循环取用；
+   * 同一环内相邻段交替用 color0/color1（见 drawRing）。
+   */
   const PALETTE = [
     ["#e7c873","#f3dfa0"], // gold
     ["#6c9bff","#a9c4ff"], // blue
@@ -342,17 +421,19 @@
     ["#8fc7e8","#c5e6ff"], // ice
   ];
 
-  const center = { angle:0, speed:26, dir:1, visible:true, lock:false };
-  let rings = [];
-  let selectedId = null;
-  let playing = true;
+  /* ---------------- 全局状态 ---------------- */
+  const center = { angle:0, speed:26, dir:1, visible:true, lock:false };   // 中心太极（angle 单位：度；dir 1=顺 -1=逆）
+  let rings = [];            // 所有圆环（数组顺序 = 从内到外）
+  let selectedId = null;     // 当前选中的环 id，'center' 表示中心太极
+  let playing = true;        // 全局播放/暂停
 
-  /* 转速上限与滑杆非线性映射：低速精细、高速可达很高 */
+  /* 转速上限与滑杆非线性映射：低速精细、高速可达很高（幂指数 2.2） */
   let SPEED_MAX = 3600;              // °/s，滑杆量程上限（可在顶部「转速上限」自定义）
   const SPEED_HARD_MAX = 200000;     // 数值框硬上限
-  function speedToSlider(v){ return Math.round(100*Math.pow(Math.max(0,Math.min(v,SPEED_MAX))/SPEED_MAX, 1/2.2)); }
-  function sliderToSpeed(s){ return Math.round(SPEED_MAX*Math.pow(s/100, 2.2)); }
+  function speedToSlider(v){ return Math.round(100*Math.pow(Math.max(0,Math.min(v,SPEED_MAX))/SPEED_MAX, 1/2.2)); }   // 速度 → 滑杆值(0~100)
+  function sliderToSpeed(s){ return Math.round(SPEED_MAX*Math.pow(s/100, 2.2)); }                                     // 滑杆值 → 速度
 
+  /* 生成某环的文字标签数组（按主题与段数） */
   function makeLabels(theme, segs, customLabels){
     if(theme==='custom') return (customLabels && customLabels.length)? customLabels.slice() : ['自定义'];
     if(theme==='scale'){
@@ -362,12 +443,21 @@
     const t = THEMES[theme];
     return t.labels.slice(0, segs);
   }
+  /* 解析用户输入的文字：支持逗号/空格/顿号/分号/斜杠/竖线分隔 */
   function parseLabels(text){
     return String(text||'').split(/[,，、;；\/|\s]+/).map(s=>s.trim()).filter(Boolean);
   }
   function nextColor(){
-    return PALETTE[rings.length % PALETTE.length];
+    return PALETTE[rings.length % PALETTE.length];   // 按已创建环数循环取色
   }
+
+  /*
+   * addRing：创建一层环并加入 rings（追加到数组末尾 = 最外层）。
+   * opts: {theme, name, segs, color, speed, dir, customText}
+   * silent: 初始化期为 true（最后统一 renderPanel），否则立即刷新面板。
+   * 注意：_inner/_outer/_mid/_thick/_rot 等运行期字段不在这里初始化，
+   *       每帧由 layoutRings()/frame() 重算。
+   */
   function addRing(opts, silent){
     const theme = opts.theme;
     let customLabels = null;
@@ -376,20 +466,20 @@
       if(customLabels.length===0) customLabels = ['自','定','义'];
     }
     let segs = opts.segs;
-    if(THEMES[theme].segs) segs = THEMES[theme].segs;
-    if(theme==='custom') segs = customLabels.length;
+    if(THEMES[theme].segs) segs = THEMES[theme].segs;     // 固定段数的主题强制覆盖
+    if(theme==='custom') segs = customLabels.length;      // 自定义：文字数量即段数
     if(!segs) segs = parseInt(document.getElementById('seg').value,10)||12;
     const c = opts.color||nextColor();
     const ring = {
-      id: 'r'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+      id: 'r'+Date.now()+'_'+Math.random().toString(36).slice(2,6),   // 时间戳+随机串，保证唯一
       theme,
       segments: segs,
       labels: makeLabels(theme, segs, customLabels),
       name: opts.name || THEMES[theme].name + '('+segs+')',
-      color0:c[0], color1:c[1],
+      color0:c[0], color1:c[1],        // 相邻段交替使用的两种文字色
       speed: opts.speed!=null?opts.speed:24,
       dir: opts.dir!=null?opts.dir:1,
-      angle: Math.random()*360,
+      angle: Math.random()*360,        // 初始随机偏角，避免所有环起点重合
       visible:true, lock:false,
     };
     rings.push(ring);
@@ -398,7 +488,8 @@
     return ring;
   }
 
-  /* 预设：主流罗盘从内到外（太极→八卦→天干→地支→二十四节气→二十八宿→刻度） */
+  /* 预设：主流罗盘从内到外（太极→八卦→八卦符号→地支→二十四节气→二十八宿→刻度）
+   * 修改默认环：改这里即可（顺序即层级，speed 单位 °/s，dir 1=顺 -1=逆） */
   addRing({theme:'trigram',  name:'内 · 八卦',   speed:14, dir: 1}, true);
   addRing({theme:'trigramSym',name:'八卦符号',     speed:18, dir:-1}, true);
   addRing({theme:'branches', name:'地支',         speed:22, dir: 1}, true);
@@ -408,6 +499,7 @@
 
   /* ---------------- 布局计算 ---------------- */
   let W=0,H=0,dpr=1;
+  /* resize：画布像素尺寸跟随容器，并处理高分屏（dpr）缩放 */
   function resize(){
     const rect = cv.parentElement.getBoundingClientRect();
     dpr = window.devicePixelRatio||1;
@@ -416,18 +508,24 @@
     cv.style.width=W+'px'; cv.style.height=H+'px';
     ctx.setTransform(dpr,0,0,dpr,0,0);
   }
+  /*
+   * layoutRings：每帧重算所有环的半径（_inner/_outer/_mid/_thick）。
+   * 半径结构（由内向外）：
+   *   圆心 → 中心太极(centerR) → firstGap → 环1 … 环N（相邻环间隔 ringGap）→ outerMargin → 画布边缘
+   * 环厚 = (可用总半径 - 间隙总和) / 环数，因此加环后所有环等比例变薄。
+   */
   function layoutRings(){
     const cx=W/2, cy=H/2;
-    const baseR = Math.min(W,H)*0.44;
-    const centerR = baseR*0.15;
+    const baseR = Math.min(W,H)*0.44;      // 罗盘外半径（留一点画布边距）
+    const centerR = baseR*0.15;            // 中心太极半径
     // 中心太极与第一圈同样内外相接：-1px 轻微重叠，与环间隙保持一致
     const firstGap = -1;
     // 环与环内外相接：留 -1px 让相邻环边界轻微重叠，既无缝隙也不会露底色（可调：0=刚好相切，正数=留缝）
     const ringGap = -1;
-    const outerMargin = baseR*0.015;
-    const total = baseR - centerR - firstGap - outerMargin;
+    const outerMargin = baseR*0.015;       // 最外环到画布边缘的余量
+    const total = baseR - centerR - firstGap - outerMargin;   // 所有环可用的总径向长度
     const n = rings.length;
-    const thickness = n>0 ? (total - ringGap*(n-1))/n : 0;
+    const thickness = n>0 ? (total - ringGap*(n-1))/n : 0;    // 环等厚
     rings.forEach((r,i)=>{
       r._inner = centerR + firstGap + i*(thickness+ringGap);
       r._outer = r._inner + thickness;
@@ -438,6 +536,7 @@
   }
 
   /* ---------------- 绘制 ---------------- */
+  /* 背景：中心向外的深色径向渐变 + 6 圈极淡参考圆环 */
   function drawBackground(cx,cy,baseR){
     const g = ctx.createRadialGradient(cx,cy,0,cx,cy,baseR*1.08);
     g.addColorStop(0,'#131826');
@@ -454,6 +553,12 @@
     ctx.restore();
   }
 
+  /*
+   * drawRing：绘制单层环。顺序：
+   *   ① 环形底色 + 内/外边界白线  ② 每段的放射分隔线  ③ 每段文字  ④ 选中高亮虚线
+   * 文字朝向：径向排列，字顶朝外、字底朝圆心（随环旋转，全环方向一致，无翻转）。
+   * 特殊分支 isSym（trigramSym 主题）：白色大字、字号按环厚与格宽取最大。
+   */
   function drawRing(ring,cx,cy,geo){
     if(!ring.visible) return;
     const inner=ring._inner, outer=ring._outer, thick=ring._thick;
@@ -479,8 +584,9 @@
     ctx.beginPath();ctx.arc(cx,cy,inner,0,TWO_PI);ctx.stroke();
 
     const N = ring.segments;
-    const segAng = TWO_PI/N;
+    const segAng = TWO_PI/N;                 // 每段弧度
     // 卦象符号环：字放大占满格（受环厚与格宽双重限制），纯白无描边
+    // 普通环：字号封顶 13px，小窗/多环时最小 9px
     const isSym = ring.theme==='trigramSym';
     const fontSize = isSym
       ? Math.max(12, Math.min(thick*0.92, rMid*segAng*0.8))
@@ -491,7 +597,7 @@
 
     for(let k=0;k<N;k++){
       const base = rot + k*segAng;
-      // spoke line at start of segment
+      // spoke line at start of segment（每段起点的放射分隔线，白色）
       const sAng = base;
       ctx.strokeStyle='#ffffff';
       ctx.lineWidth=1;
@@ -500,7 +606,7 @@
       ctx.lineTo(cx+Math.cos(sAng)*outer, cy+Math.sin(sAng)*outer);
       ctx.stroke();
       // label 随环转动 + 统一径向朝向：字顶朝外、字底朝圆心（站在圆心向外读，方向全环一致，无翻转）
-      const midAng = rot + (k+0.5)*segAng;
+      const midAng = rot + (k+0.5)*segAng;   // 文字位于段中央
       const label = ring.labels[k];
       if(label){
         const lx = cx + Math.cos(midAng)*rMid;
@@ -508,7 +614,7 @@
         ctx.save();
         ctx.translate(lx, ly);
         ctx.rotate(midAng + Math.PI/2);   // 使字形"下方"对准圆心
-        ctx.fillStyle = isSym ? '#ffffff' : ((k%2===0)? ring.color0 : ring.color1);
+        ctx.fillStyle = isSym ? '#ffffff' : ((k%2===0)? ring.color0 : ring.color1);   // 卦象符号纯白，其余环相邻段交替双色
         ctx.shadowColor = isSym ? 'rgba(255,255,255,.6)' : ring.color0;
         ctx.shadowBlur = isSym ? 3 : 6;
         ctx.fillText(label, 0, 0);
@@ -517,7 +623,7 @@
       }
     }
 
-    // 选中高亮（画布可见反馈）
+    // 选中高亮（画布可见反馈）：内外各一圈金色虚线
     if(ring.id===selectedId){
       ctx.strokeStyle='rgba(231,200,115,0.95)';
       ctx.lineWidth=2;
@@ -529,6 +635,11 @@
     ctx.restore();
   }
 
+  /*
+   * drawYinYang：绘制中心太极（经典画法）。
+   * 大圆填白 → 右半圆填黑 → 上/下两个小半圆（鱼头）→ 鱼眼 → 白色描边。
+   * 外层有金色光晕；整体随 center._rot 旋转。
+   */
   function drawYinYang(cx,cy,R){
     if(!center.visible) return;
     // luminous halo
@@ -560,11 +671,16 @@
 
   /* ---------------- 主循环 ---------------- */
   let lastTs=null;
+  /*
+   * frame：requestAnimationFrame 每帧执行。
+   * ① 按帧间隔推进各环/太极角度（速度°/s × dt）；锁定环不转；暂停时 dt 置 0。
+   * ② 重算布局 → 重绘：背景 → 各环 → 中心太极。
+   */
   function frame(ts){
     if(!lastTs) lastTs=ts;
     let dt=(ts-lastTs)/1000;
     lastTs=ts;
-    if(dt>0.1) dt=0.1;
+    if(dt>0.1) dt=0.1;            // 切后台回来帧间隔过大，钳制避免跳变
     const f = playing ? dt : 0;
 
     // advance angles (deg->rad)
@@ -584,6 +700,11 @@
   }
 
   /* ---------------- 历史快照（撤销/重做，回档） ---------------- */
+  /*
+   * 快照式撤销：修改前 pushHistory() 存一份 JSON 快照，undo/redo 栈上限 50。
+   * 埋点规则：按钮类在点击时存；滑杆在 pointerdown/keydown 存（一次拖动只存一条）；
+   *           数字框在 focus 时存。任何新的修改入口都要遵守同样规则，否则撤销会吞并多步。
+   */
   const HISTORY_LIMIT=50;
   let undoStack=[], redoStack=[];
   function snapshot(){
@@ -604,7 +725,7 @@
   function restore(json){
     const s=JSON.parse(json);
     Object.assign(center,s.center);
-    rings=s.rings;                        // 运行期字段(_inner等)由 layoutRings 每帧重算
+    rings=s.rings;                        // 运行期字段(_inner等)由 layoutRings 每帧重算，无需恢复
     selectedId=s.selectedId;
     if(s.speedMax){ SPEED_MAX=s.speedMax; const mi=document.getElementById('maxSpeedInput'); if(mi) mi.value=s.speedMax; }
     updateCenterBtn();
@@ -624,6 +745,7 @@
     updateUndoBtns();
     toast('已重做 ↪');
   }
+  /* 同步撤销/重做按钮的可用状态（顶栏按钮已移除，此函数仅在按钮存在时生效） */
   function updateUndoBtns(){
     const u=document.getElementById('btnUndo'), r=document.getElementById('btnRedo');
     if(u) u.disabled = undoStack.length===0;
@@ -634,8 +756,13 @@
   const listEl=document.getElementById('ringList');
   const selinfoEl=document.getElementById('selinfo');
 
-  function esc(s){return s;}
+  function esc(s){return s;}   // 预留：文本转义（当前未启用）
 
+  /*
+   * renderPanel：整列重建右侧卡片（中心太极卡 + 每个环一张卡）。
+   * 每次状态变更后整列重建并重新绑定事件——简单直接，状态与 DOM 不会失同步。
+   * 卡片内所有修改入口都要先 pushHistory()（按钮点击）或按埋点规则（滑杆/数字框）。
+   */
   function renderPanel(){
     listEl.innerHTML='';
     // 中心太极控制卡（始终在最上方）
@@ -645,7 +772,7 @@
       empty.className='empty'; empty.textContent='还没有圆环，从上方添加一层吧';
       listEl.appendChild(empty);
     }
-    // draw from outermost (reverse) so list shows outer first? keep inner-first order
+    // draw from outermost (reverse) so list shows outer first? keep inner-first order（列表与环层级一致：内→外）
     rings.forEach(r=>{
       const card=document.createElement('div');
       card.className='ringcard'+(r.id===selectedId?' selected':'')+(r.visible?'':' hidden');
@@ -680,16 +807,19 @@
       `;
       listEl.appendChild(card);
 
-      // events
+      // ---- 卡片事件绑定 ----
+      // 点卡片空白处选中该环（点按钮/输入框不触发）
       card.addEventListener('click',(e)=>{
         if(e.target.closest('[data-act]')||e.target.closest('[data-dir]')||e.target.tagName==='INPUT') return;
         selectedId=r.id; renderPanel();
       });
+      // 方向切换
       card.querySelector('.dir-toggle').addEventListener('click',(e)=>{
         const b=e.target.closest('[data-dir]'); if(!b)return;
         if(r.dir!==parseInt(b.dataset.dir,10)) pushHistory();
         r.dir=parseInt(b.dataset.dir,10); renderPanel();
       });
+      // 转速：滑杆（非线性映射）与数字框双向同步
       const spd=card.querySelector('.spd-range');
       const num=card.querySelector('.speed-num');
       spd.addEventListener('pointerdown',pushHistory);           // 拖动开始前存档
@@ -697,13 +827,16 @@
       spd.addEventListener('input',()=>{ r.speed=sliderToSpeed(parseInt(spd.value,10)); num.value=r.speed; });
       num.addEventListener('focus',pushHistory);                // 输入前存档
       num.addEventListener('input',()=>{ let v=parseInt(num.value,10); if(isNaN(v))v=0; v=Math.max(0,Math.min(SPEED_HARD_MAX,v)); r.speed=v; spd.value=speedToSlider(v); });
+      // 偏移角
       const ang=card.querySelector('.ang-range');
       if(ang){ ang.value = ((r.angle%360)+360)%360;
         ang.addEventListener('pointerdown',pushHistory);
         ang.addEventListener('keydown',pushHistory);
         ang.addEventListener('input',()=>{ r.angle=parseInt(ang.value,10); }); }
+      // ▾ 折叠卡片（不入历史——纯视图状态）
       card.querySelector('[data-act=fold]')?.addEventListener('click',(e)=>{ e.stopPropagation(); r.folded=!r.folded; card.classList.toggle('folded',!!r.folded); });
       if(r.folded) card.classList.add('folded');
+      // 显示/隐藏、锁定、删除、编辑文字
       card.querySelector('[data-act=vis]').addEventListener('click',(e)=>{ e.stopPropagation(); pushHistory(); r.visible=!r.visible; renderPanel(); });
       card.querySelector('[data-act=lock]').addEventListener('click',(e)=>{ e.stopPropagation(); pushHistory(); r.lock=!r.lock; renderPanel(); });
       card.querySelector('[data-act=del]').addEventListener('click',(e)=>{ e.stopPropagation(); deleteRing(r.id); });
@@ -714,13 +847,13 @@
         const labs = parseLabels(input);
         if(labs.length===0) return;
         pushHistory();
-        r.labels = labs; r.segments = labs.length; r.theme='custom';
+        r.labels = labs; r.segments = labs.length; r.theme='custom';   // 编辑过文字的环降级为 custom 主题
         renderPanel();
         toast('已更新该环文字（'+labs.length+' 段）');
       });
     });
 
-    // 画布左上角选中信息 + 面板滚动到选中项
+    // 画布左上角选中信息 + 面板滚动到选中项（selinfo 默认被 CSS 隐藏，仅滚动同步生效）
     let infoText=null;
     if(selectedId==='center'){
       infoText='已选中：中心太极 · '+(center.dir>0?'顺时针·右':'逆时针·左')+' '+center.speed+'°/s'+(center.visible?'':'（已隐藏）');
@@ -738,7 +871,7 @@
     }
   }
 
-  /* 中心太极控制卡 */
+  /* 中心太极控制卡（结构与环卡片一致，无编辑/删除按钮） */
   function buildCenterCard(){
     const card=document.createElement('div');
     card.className='ringcard centercard'+(selectedId==='center'?' selected':'')+(center.visible?'':' hidden');
@@ -798,11 +931,13 @@
     center.visible=!center.visible;
     updateCenterBtn();
   }
+  /* 同步顶栏「中心太极」按钮文案与透明度 */
   function updateCenterBtn(){
     btnCenterToggle.textContent= center.visible?'⚙ 中心太极':'⚙ 中心隐藏';
     btnCenterToggle.style.opacity=center.visible?'1':'.6';
   }
 
+  /* 删除环：先存档；删除后选中项回退到最外层 */
   function deleteRing(id){
     const idx=rings.findIndex(r=>r.id===id);
     if(idx<0)return;
@@ -813,7 +948,7 @@
     toast('已删除圆环');
   }
 
-  /* canvas click -> select ring */
+  /* canvas click -> select ring（按点到圆心的距离命中：先判中心，再由外向内判环） */
   cv.addEventListener('click',(e)=>{
     const rect=cv.getBoundingClientRect();
     const x=e.clientX-rect.left, y=e.clientY-rect.top;
@@ -821,7 +956,7 @@
     const d=Math.hypot(x-geo.cx,y-geo.cy);
     // 点中中心太极
     if(d<=geo.centerR){ selectedId='center'; renderPanel(); return; }
-    // check rings from outermost inward
+    // check rings from outermost inward（相邻环边界有 1px 重叠，先判外层）
     for(let i=rings.length-1;i>=0;i--){
       const r=rings[i];
       if(d>=r._inner && d<=r._outer){ selectedId=r.id; renderPanel(); return; }
@@ -836,8 +971,8 @@
   }
   btnPlay.addEventListener('click',togglePlay);
 
+  // 复位：所有角度归零、全部显示，中心恢复默认转速/方向（保留各环已设转速与方向）
   document.getElementById('btnResetAll').addEventListener('click',()=>{
-    // 复位：所有角度归零、全部显示，中心恢复默认转速/方向（保留各环已设转速与方向）
     pushHistory();
     center.angle=0; center.speed=26; center.dir=1; center.visible=true;
     rings.forEach(r=>{ r.angle=0; r.visible=true; });
@@ -848,6 +983,7 @@
   const btnCenterToggle=document.getElementById('btnCenterToggle');
   btnCenterToggle.addEventListener('click',()=>{ pushHistory(); toggleCenterVisible(); renderPanel(); });
 
+  /* 「＋ 添加到最外层」 */
   document.getElementById('btnAdd').addEventListener('click',()=>{
     const theme=document.getElementById('themeSel').value;
     const spd=parseInt(document.getElementById('spd').value,10)||0;
@@ -880,7 +1016,7 @@
     toast('转速上限已设为 '+v+'°/s');
   });
 
-  /* toast */
+  /* toast：右下角浮动提示，1.4s 自动消失 */
   let toastTimer=null;
   const toastEl=document.getElementById('toast');
   function toast(msg){
@@ -890,7 +1026,7 @@
     toastTimer=setTimeout(()=>toastEl.classList.remove('show'),1400);
   }
 
-  /* keyboard */
+  /* keyboard：空格=播放/暂停，Ctrl+Z/Y=撤销/重做，F=全屏（输入框聚焦时不拦截，保留原生编辑） */
   window.addEventListener('keydown',(e)=>{
     if(e.code==='Space'){ e.preventDefault(); togglePlay(); }
     // 撤销/重做：输入框内不拦截（保留原生文本编辑）
@@ -913,13 +1049,19 @@
   const panelToggleEl=document.getElementById('panelToggle');
 
   // 「展开顶栏」按钮始终贴在操作台左侧：面板展开时向左让出面板宽度，避免重叠
+  // 触发时机：折叠/展开面板、拖拽调宽（实时）、顶栏收展、窗口缩放
   function syncHeaderShowPos(){
     const el=document.getElementById('headerShow');
     if(!el) return;
-    const w = asideEl.classList.contains('collapsed') ? 0 : (asideEl.offsetWidth + 5);
+    const w = asideEl.classList.contains('collapsed') ? 0 : (asideEl.offsetWidth + 5);   // +5 = 拖拽条宽度
     el.style.right = (14 + w) + 'px';
   }
 
+  /*
+   * setPanelCollapsed：折叠/展开右侧操作台。
+   * 宽度过渡为 0.18s：动画开始时 resize 一次，setTimeout 200ms + transitionend 再各校准一次，
+   * 否则动画结束后画布比舞台小、两侧露出色差边。
+   */
   function setPanelCollapsed(on){
     asideEl.classList.toggle('collapsed',on);
     resizerEl.style.display = on? 'none' : '';   // 收起时隐藏拖拽条
@@ -936,14 +1078,14 @@
     setPanelCollapsed(!asideEl.classList.contains('collapsed'));
   });
 
-  // 拖拽分隔条：240~640px，拖到 <200 自动折叠
+  // 拖拽分隔条：240~640px，拖到 <200 自动折叠；拖拽时禁用宽度过渡避免迟滞，松手恢复
   let dragging=false;
   resizerEl.addEventListener('mousedown',(e)=>{
     if(asideEl.classList.contains('collapsed')) return;
     dragging=true; resizerEl.classList.add('dragging');
     asideEl.style.transition='none';            // 拖拽时禁用宽度过渡，避免迟滞
-    const hs=document.getElementById('headerShow'); if(hs) hs.style.transition='none';
-    document.body.style.userSelect='none';
+    const hs=document.getElementById('headerShow'); if(hs) hs.style.transition='none';   // 「⌄ 顶栏」同样跟手
+    document.body.style.userSelect='none';      // 拖拽时禁止选中文字
     e.preventDefault();
   });
   window.addEventListener('mousemove',(e)=>{
@@ -984,7 +1126,7 @@
   const btnHeaderToggle=document.getElementById('btnHeaderToggle');
   function setHeaderCollapsed(on){
     headerEl.classList.toggle('collapsed',on);
-    document.body.classList.toggle('hdr-collapsed',on);
+    document.body.classList.toggle('hdr-collapsed',on);   // 供 CSS 下移「▤ 面板」按钮
     headerShowEl.style.display = on? 'block' : 'none';
     syncHeaderShowPos();
     btnHeaderToggle.textContent = on? '⌄ 展开顶栏' : '⌃ 收起顶栏';
@@ -993,7 +1135,7 @@
   btnHeaderToggle.addEventListener('click',()=>setHeaderCollapsed(!headerEl.classList.contains('collapsed')));
   headerShowEl.addEventListener('click',()=>setHeaderCollapsed(false));
 
-  /* ---------------- 全屏显示 ---------------- */
+  /* ---------------- 全屏显示（F 快捷键同款逻辑，带 webkit 回退） ---------------- */
   const btnFs=document.getElementById('btnFullscreen');
   function isFullscreen(){ return !!(document.fullscreenElement||document.webkitFullscreenElement); }
   function toggleFullscreen(){
@@ -1012,6 +1154,8 @@
       requestAnimationFrame(()=>resize());   // 尺寸变化后重排画布
     })
   );
+
+  /* ---------------- 启动 ---------------- */
   window.addEventListener('resize',()=>{ resize(); syncHeaderShowPos(); });
   resize();
   renderPanel();
