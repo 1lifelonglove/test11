@@ -210,6 +210,14 @@
   .speed-row .unit{font-size:10px;color:var(--muted);margin-left:2px;}
   .speed-num::-webkit-outer-spin-button,.speed-num::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
   .speed-num{-moz-appearance:textfield;appearance:textfield;}
+  .font-num{
+    width:62px;background:var(--bg1);border:1px solid var(--line);color:var(--gold);
+    padding:4px 6px;border-radius:6px;font-size:11px;text-align:right;outline:none;
+    font-variant-numeric:tabular-nums;
+  }
+  .font-num:focus{border-color:var(--gold);}
+  .font-num::-webkit-outer-spin-button,.font-num::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .font-num{-moz-appearance:textfield;appearance:textfield;}
 
   .ringcard.selected{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset;}   /* 选中描金边 */
   .ringcard.hidden{opacity:.5;}   /* 已隐藏的环：卡片半透明 */
@@ -292,9 +300,16 @@
       <input type="number" id="maxSpeedInput" min="360" max="200000" step="60" value="3600">
       <span class="unit">°/s</span>
     </div>
+    <!-- 全局字号倍率：统一缩放所有环文字（含手动覆盖的环），默认 100% -->
+    <div class="maxset">
+      <label for="globalFontRange">全局字号</label>
+      <input type="range" id="globalFontRange" min="0.5" max="2" step="0.1" value="1">
+      <span class="unit" id="globalFontVal">100%</span>
+    </div>
     <button class="btn" id="btnFullscreen" title="全屏显示 (F)">⛶ 全屏</button>
     <button class="btn" id="btnPlay" data-page-node-id="UqR3Jg80DnHB03A8aij7uz">⏸ 暂停</button>
     <button class="btn ghost" id="btnResetAll" data-page-node-id="IfI8vxhM5vRWEfJ9Vl6PkM">↺ 全部复位</button>
+    <button class="btn ghost" id="btnResetDefault" title="清除本地存档并恢复出厂默认布局">⌖ 恢复默认布局</button>
     <button class="btn primary" id="btnCenterToggle" data-page-node-id="G2YxUmCtV3V4M90j4EeB6E">⚙ 中心太极</button>
     <button class="btn ghost" id="btnHeaderToggle" title="收起/展开顶栏">⌃ 收起顶栏</button>
   </header>
@@ -334,13 +349,16 @@
           <label data-page-node-id="xdzqz2FolCnv6DB2uQk71X">内容主题（决定环上文字）</label>
           <!-- 新增主题时需同时在 JS 的 THEMES 里登记 -->
           <select id="themeSel" data-page-node-id="9ABKoPbsEvTH2nHByIxIRP">
-            <option value="trigram" data-page-node-id="fsZ9RtneDeP3IVjfvQKgMl">八卦（8 段）</option>
-            <option value="trigramSym">八卦符号（☰☱☲☳…8 段，白色大字）</option>
+            <option value="trigram" data-page-node-id="fsZ9RtneDeP3IVjfvQKgMl">先天八卦（伏羲·8 段）</option>
+            <option value="trigramHou">后天八卦（文王·8 段）</option>
+            <option value="trigramSym">八卦符号（先天·8 段，白色大字）</option>
             <option value="stems" data-page-node-id="9GSWd1SEXTs6oXlrGKbbvl">天干（甲乙丙丁…10 段）</option>
             <option value="branches" data-page-node-id="pbDRqHDSwZzM3PdjOCU2v7">地支（子丑寅卯…12 段）</option>
             <option value="mountains">二十四山（24 段）</option>
             <option value="terms" data-page-node-id="dB8ZNQw3Pz7XXAwbEKWsfZ">二十四节气（24 段）</option>
             <option value="mansions">二十八宿（28 段）</option>
+            <option value="gua64">六十四卦（文王序·64 段）</option>
+            <option value="gua64Sym">六十四卦符号（文王序·64 段，白色大字）</option>
             <option value="scale" data-page-node-id="B0urrORNWKmkZRpZI77g0d">数字刻度（N 段）</option>
             <option value="blank" data-page-node-id="xwCZs7fn7HbpGzZpxZG3eH">空白刻度环（仅刻度线）</option>
             <option value="custom">自定义（自填文字）</option>
@@ -395,13 +413,21 @@
    *   ③ 如需特殊绘制（大字/纯色）在 drawRing() 里按 theme 分支处理。
    */
   const THEMES = {
-    trigram:  { name:"八卦",     segs:8,  labels:["乾","兑","离","震","巽","坎","艮","坤"] },
-    trigramSym:{ name:"八卦符号", segs:8,  labels:["☰","☱","☲","☳","☴","☵","☶","☷"] },   // 特殊绘制：白色大字占满格（见 drawRing 的 isSym 分支）
-    stems:    { name:"天干",     segs:10, labels:["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"] },
-    branches: { name:"地支",     segs:12, labels:["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"] },
-    mountains:{ name:"二十四山", segs:24, labels:["壬","子","癸","丑","艮","寅","甲","卯","乙","辰","巽","巳","丙","午","丁","未","坤","申","庚","酉","辛","戌","乾","亥"] },
-    terms:    { name:"二十四节气",segs:24, labels:["立春","雨水","惊蛰","春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至","小寒","大寒"] },
-    mansions: { name:"二十八宿", segs:28, labels:["角","亢","氐","房","心","尾","箕","斗","牛","女","虚","危","室","壁","奎","娄","胃","昴","毕","觜","参","井","鬼","柳","星","张","翼","轸"] },
+    // —— 八卦：两种公认卦序务必区分（先天为体、后天为用）——
+    trigram:  { name:"先天八卦（伏羲·8段）", segs:8,  labels:["乾","兑","离","震","巽","坎","艮","坤"] },   // 先天数序：乾1兑2离3震4巽5坎6艮7坤8
+    trigramHou:{ name:"后天八卦（文王·8段）", segs:8,  labels:["坎","坤","震","巽","乾","兑","艮","离"] },   // 后天数序（洛书）：坎1坤2震3巽4乾6兑7艮8离9
+    trigramSym:{ name:"八卦符号（先天·8段）", segs:8,  labels:["☰","☱","☲","☳","☴","☵","☶","☷"] },   // 白色大字；顺序与先天八卦一致（见 drawRing 的 isSym 分支）
+    // —— 干支 / 方位 ——
+    stems:    { name:"天干（10段）", segs:10, labels:["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"] },
+    branches: { name:"地支（12段）", segs:12, labels:["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"] },
+    mountains:{ name:"二十四山（24段）", segs:24, labels:["壬","子","癸","丑","艮","寅","甲","卯","乙","辰","巽","巳","丙","午","丁","未","坤","申","庚","酉","辛","戌","乾","亥"] },
+    // —— 历法 / 天文 ——
+    terms:    { name:"二十四节气（24段）",segs:24, labels:["立春","雨水","惊蛰","春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至","小寒","大寒"] },
+    mansions: { name:"二十八宿（28段）", segs:28, labels:["角","亢","氐","房","心","尾","箕","斗","牛","女","虚","危","室","壁","奎","娄","胃","昴","毕","觜","参","井","鬼","柳","星","张","翼","轸"] },
+    // —— 易学扩展 ——
+    gua64:    { name:"六十四卦（文王序·64段）", segs:64, labels:["乾","坤","屯","蒙","需","讼","师","比","小畜","履","泰","否","同人","大有","谦","豫","随","蛊","临","观","噬嗑","贲","剥","复","无妄","大畜","颐","大过","坎","离","咸","恒","遁","大壮","晋","明夷","家人","睽","蹇","解","损","益","夬","姤","萃","升","困","井","革","鼎","震","艮","渐","归妹","丰","旅","巽","兑","涣","节","中孚","小过","既济","未济"] },
+    gua64Sym: { name:"六十四卦符号（文王序·64段）", segs:64, labels:["䷀","䷁","䷂","䷃","䷄","䷅","䷆","䷇","䷈","䷉","䷊","䷋","䷌","䷍","䷎","䷏","䷐","䷑","䷒","䷓","䷔","䷕","䷖","䷗","䷘","䷙","䷚","䷛","䷜","䷝","䷞","䷟","䷠","䷡","䷢","䷣","䷤","䷥","䷦","䷧","䷨","䷩","䷪","䷫","䷬","䷭","䷮","䷯","䷰","䷱","䷲","䷳","䷴","䷵","䷶","䷷","䷸","䷹","䷺","䷻","䷼","䷽","䷾","䷿"] },   // Unicode 六十四卦块即按文王序：䷀乾…䷿未济
+    // —— 通用 ——
     scale:    { name:"数字刻度", segs:null },   // 标签 = 0..N-1
     blank:    { name:"空白刻度", segs:null },   // 只有刻度线，无文字
     custom:   { name:"自定义",   segs:null },   // 用户自填文字，数量即段数
@@ -426,9 +452,76 @@
   let rings = [];            // 所有圆环（数组顺序 = 从内到外）
   let selectedId = null;     // 当前选中的环 id，'center' 表示中心太极
   let playing = true;        // 全局播放/暂停
+  let booted = false;        // 启动完成标记：启动前的初始化静默期不触发自动存盘
+
+  /* ---------------- 本地存档（localStorage） ----------------
+   * 目标：用户调整圆环/太极后自动保存到浏览器本地，下次打开按存档还原。
+   * 关键点：
+   *   · 只存「配置」不存「运行期字段」（_inner/_outer/_mid/_thick/_rot 每帧重算）；
+   *   · 只存静态配置（转速/方向/文字/颜色/可见性/锁定/偏移角），不存实时旋转角度；
+   *   · 读写全程 try/catch，隐私模式或 file:// 不支持时静默降级，不影响使用。
+   */
+  const STORAGE_KEY = 'taichi-ring-control:v1';
+  /* 统一序列化：history 的 snapshot() 与 localStorage 的 saveState() 共用，避免重复结构 */
+  function collectState(){
+    return {
+      center:{ speed:center.speed, dir:center.dir, visible:center.visible, lock:center.lock, folded:!!center.folded },
+      rings: rings.map(r=>({
+        id:r.id, theme:r.theme, segments:r.segments, labels:r.labels.slice(), labels2: Array.isArray(r.labels2)? r.labels2.slice():null, fontSize: r.fontSize||0,
+        name:r.name, color0:r.color0, color1:r.color1, speed:r.speed, dir:r.dir,
+        angle:r.angle, visible:r.visible, lock:!!r.lock, folded:!!r.folded
+      })),
+      selectedId, speedMax:SPEED_MAX, globalFontScale:GLOBAL_FONT_SCALE
+    };
+  }
+  function saveState(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({v:1, ...collectState()}));
+    }catch(e){ /* localStorage 不可用（隐私模式/file:// 限制）时忽略 */ }
+  }
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return false;
+      const d = JSON.parse(raw);
+      if(!d || !Array.isArray(d.rings)) return false;
+      if(d.center){
+        center.speed = (d.center.speed!=null)? d.center.speed : center.speed;
+        center.dir   = (d.center.dir!=null)?   d.center.dir   : center.dir;
+        center.visible = (d.center.visible!==undefined)? d.center.visible : center.visible;
+        center.lock    = (d.center.lock!=null)? d.center.lock : center.lock;
+        center.folded  = !!d.center.folded;
+      }
+      rings = d.rings.map(r=>({
+        id: r.id || ('r'+Date.now()+'_'+Math.random().toString(36).slice(2,6)),
+        theme: r.theme,
+        segments: r.segments,
+        labels: Array.isArray(r.labels)? r.labels.slice() : [],
+        labels2: Array.isArray(r.labels2)? r.labels2.slice():null,
+        fontSize: (r.fontSize>0)? r.fontSize : 0,
+        name: r.name || '',
+        color0: r.color0 || '#e7c873', color1: r.color1 || '#f3dfa0',
+        speed: (r.speed!=null)? r.speed : 24,
+        dir: (r.dir!=null)? r.dir : 1,
+        angle: (r.angle!=null)? r.angle : 0,
+        visible: (r.visible!==undefined)? r.visible : true,
+        lock: !!r.lock,
+        folded: !!r.folded
+      }));
+      if(d.selectedId!==undefined) selectedId = d.selectedId;
+      if(d.speedMax){ SPEED_MAX = d.speedMax; const mi=document.getElementById('maxSpeedInput'); if(mi) mi.value=d.speedMax; }
+      if(typeof d.globalFontScale==='number'){
+        GLOBAL_FONT_SCALE = d.globalFontScale;
+        const gf=document.getElementById('globalFontRange'); if(gf) gf.value=GLOBAL_FONT_SCALE;
+        const gfv=document.getElementById('globalFontVal'); if(gfv) gfv.textContent=Math.round(GLOBAL_FONT_SCALE*100)+'%';
+      }
+      return true;
+    }catch(e){ return false; }
+  }
 
   /* 转速上限与滑杆非线性映射：低速精细、高速可达很高（幂指数 2.2） */
   let SPEED_MAX = 3600;              // °/s，滑杆量程上限（可在顶部「转速上限」自定义）
+  let GLOBAL_FONT_SCALE = 1;         // 全局字号倍率（顶栏滑块控制，统一缩放所有环文字，1=100%）
   const SPEED_HARD_MAX = 200000;     // 数值框硬上限
   function speedToSlider(v){ return Math.round(100*Math.pow(Math.max(0,Math.min(v,SPEED_MAX))/SPEED_MAX, 1/2.2)); }   // 速度 → 滑杆值(0~100)
   function sliderToSpeed(s){ return Math.round(SPEED_MAX*Math.pow(s/100, 2.2)); }                                     // 滑杆值 → 速度
@@ -475,6 +568,8 @@
       theme,
       segments: segs,
       labels: makeLabels(theme, segs, customLabels),
+      labels2: Array.isArray(opts.labels2)? opts.labels2.slice() : null,   // 可选第二行文字（上下两行）
+      fontSize: (typeof opts.fontSize==='number' && opts.fontSize>0)? opts.fontSize : 0,   // 0=自动
       name: opts.name || THEMES[theme].name + '('+segs+')',
       color0:c[0], color1:c[1],        // 相邻段交替使用的两种文字色
       speed: opts.speed!=null?opts.speed:24,
@@ -488,14 +583,25 @@
     return ring;
   }
 
-  /* 预设：主流罗盘从内到外（太极→八卦→八卦符号→地支→二十四节气→二十八宿→刻度）
+  /* 默认预设：主流罗盘从内到外（太极→八卦→八卦符号→地支→二十四节气→二十八宿→刻度）
    * 修改默认环：改这里即可（顺序即层级，speed 单位 °/s，dir 1=顺 -1=逆） */
-  addRing({theme:'trigram',  name:'内 · 八卦',   speed:14, dir: 1}, true);
-  addRing({theme:'trigramSym',name:'八卦符号',     speed:18, dir:-1}, true);
-  addRing({theme:'branches', name:'地支',         speed:22, dir: 1}, true);
-  addRing({theme:'terms',    name:'二十四节气',    speed:10, dir:-1}, true);
-  addRing({theme:'mansions', name:'二十八宿',      speed:12, dir: 1}, true);
-  addRing({theme:'scale',    name:'外 · 刻度', segs:36, speed:8, dir: 1}, true);
+  function seedDefaultRings(){
+    addRing({theme:'trigramSym',name:'内 · 八卦符号（先天序）', speed:14, dir: 1}, true);   // 太极外第一圈：八卦符号 ☰☱☲☳☴☵☶☷（先天序，非文字）
+    addRing({theme:'trigramHou',name:'后天八卦',                speed:18, dir:-1}, true);   // 文王序（洛书）：坎坤震巽乾兑艮离
+    addRing({theme:'stems',     name:'天干',                    speed:22, dir: 1}, true);
+    addRing({theme:'branches',  name:'地支',                    speed:10, dir:-1}, true);
+    addRing({theme:'mountains', name:'二十四山',                 speed:12, dir: 1}, true);
+    addRing({theme:'terms',     name:'二十四节气',               speed: 8, dir:-1}, true);
+    addRing({theme:'mansions',  name:'二十八宿',                 speed:12, dir: 1}, true);
+    addRing({theme:'gua64',     name:'外 · 六十四卦',            speed: 6, dir:-1, segs:64}, true);
+    addRing({theme:'gua64Sym',  name:'最外 · 六十四卦符号',       speed: 6, dir:-1, segs:64}, true);
+  }
+  /* 初始化：优先还原本地存档，无存档才植入默认预设 */
+  function initRings(){
+    if(loadState()) return;     // 命中存档：直接还原，跳过默认预设
+    seedDefaultRings();
+  }
+  initRings();
 
   /* ---------------- 布局计算 ---------------- */
   let W=0,H=0,dpr=1;
@@ -557,7 +663,7 @@
    * drawRing：绘制单层环。顺序：
    *   ① 环形底色 + 内/外边界白线  ② 每段的放射分隔线  ③ 每段文字  ④ 选中高亮虚线
    * 文字朝向：径向排列，字顶朝外、字底朝圆心（随环旋转，全环方向一致，无翻转）。
-   * 特殊分支 isSym（trigramSym 主题）：白色大字、字号按环厚与格宽取最大。
+   * 特殊分支 isSym（trigramSym / gua64Sym 主题）：白色大字、字号按环厚与格宽取最大。
    */
   function drawRing(ring,cx,cy,geo){
     if(!ring.visible) return;
@@ -573,27 +679,58 @@
     ctx.arc(cx,cy,inner,0,TWO_PI,true);
     ctx.fillStyle='rgba(255,255,255,0.03)';
     ctx.fill();
+    // 边界线：每条只画一次（相邻环共享边界由外层环 outer 画，消除双线；最内环补一次 inner 贴中心）
     ctx.strokeStyle='#ffffff';
     ctx.lineWidth=1;
-    ctx.stroke();
-    // inner + outer boundary lines（纯白）
-    ctx.strokeStyle='#ffffff';
-    ctx.lineWidth=1;
-    ctx.beginPath();ctx.arc(cx,cy,outer,0,TWO_PI);ctx.stroke();
-    ctx.strokeStyle='#ffffff';
-    ctx.beginPath();ctx.arc(cx,cy,inner,0,TWO_PI);ctx.stroke();
+    if(ring===rings[0]){                       // 仅最内环画内边界（其内无相邻环）
+      ctx.beginPath();ctx.arc(cx,cy,inner,0,TWO_PI);ctx.stroke();
+    }
+    ctx.beginPath();ctx.arc(cx,cy,outer,0,TWO_PI);ctx.stroke();   // 本环外边界 = 与下一环共享边界，画一次
 
     const N = ring.segments;
     const segAng = TWO_PI/N;                 // 每段弧度
-    // 卦象符号环：字放大占满格（受环厚与格宽双重限制），纯白无描边
-    // 普通环：字号封顶 13px，小窗/多环时最小 9px
-    const isSym = ring.theme==='trigramSym';
-    const fontSize = isSym
-      ? Math.max(12, Math.min(thick*0.92, rMid*segAng*0.8))
-      : Math.max(9, Math.min(thick*0.62, 13));
+    const isSym = ring.theme==='trigramSym' || ring.theme==='gua64Sym';
+    // 第二行文字：可选 labels2（长度=段数），实现"一个环内上下两行"
+    const has2 = !isSym && Array.isArray(ring.labels2) && ring.labels2.length===N && ring.labels2.some(s=>s && String(s).trim()!=='');
+    // 字号 / 行半径：两行时上下分布于环带内，单行时居中；符号环始终单行放大
+    // 每环可手动覆盖字号：ring.fontSize>0 时直接用指定值，覆盖自动计算（0/空=自动）
+    const fzOverride = (typeof ring.fontSize==='number' && ring.fontSize>0) ? ring.fontSize : 0;
+    let fontSize, rRow1, rRow2;
+    if(isSym){
+      fontSize = fzOverride || Math.max(12, Math.min(thick*0.92, rMid*segAng*0.8));
+      rRow1 = rMid; rRow2 = rMid;
+    } else if(has2){
+      fontSize = fzOverride || Math.max(7, Math.min(thick*0.36, 11));   // 每行略小，给中间留分隔线空间
+      rRow1 = inner + thick*0.27;                          // 上行（近内边界）
+      rRow2 = inner + thick*0.73;                          // 下行（近外边界）
+    } else {
+      fontSize = fzOverride || Math.max(9, Math.min(thick*0.62, 13));
+      rRow1 = rMid; rRow2 = rMid;
+    }
+    fontSize = Math.max(6, fontSize * GLOBAL_FONT_SCALE);   // 全局字号倍率：统一缩放所有环（含手动覆盖的环）
+    // 双行环：上下两行之间加一条圆弧分隔线（位于环带正中 radius = inner + thick*0.5）
+    if(has2){
+      ctx.strokeStyle='rgba(255,255,255,0.45)';
+      ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(cx,cy, inner + thick*0.5, 0, TWO_PI); ctx.stroke();
+    }
     ctx.font = (isSym? 'normal ' : (ring.theme==='terms'? 'normal ':'600 '))+fontSize+'px "Segoe UI Symbol","Microsoft YaHei","PingFang SC",sans-serif';
     ctx.textAlign='center';
     ctx.textBaseline='middle';
+    // 在段中央、指定半径处绘制一行文字（字顶朝外，随环旋转，不翻转）
+    function drawLabel(txt, ang, rad){
+      const lx = cx + Math.cos(ang)*rad;
+      const ly = cy + Math.sin(ang)*rad;
+      ctx.save();
+      ctx.translate(lx, ly);
+      ctx.rotate(ang + Math.PI/2);   // 字形"下方"对准圆心
+      ctx.fillStyle = '#ffffff';                                  // 全部文字纯白
+      ctx.shadowColor = 'rgba(255,255,255,.5)';                   // 白色柔光，保证深底可读
+      ctx.shadowBlur = 4;
+      ctx.fillText(txt, 0, 0);
+      ctx.shadowBlur=0;
+      ctx.restore();
+    }
 
     for(let k=0;k<N;k++){
       const base = rot + k*segAng;
@@ -605,22 +742,11 @@
       ctx.moveTo(cx+Math.cos(sAng)*inner, cy+Math.sin(sAng)*inner);
       ctx.lineTo(cx+Math.cos(sAng)*outer, cy+Math.sin(sAng)*outer);
       ctx.stroke();
-      // label 随环转动 + 统一径向朝向：字顶朝外、字底朝圆心（站在圆心向外读，方向全环一致，无翻转）
       const midAng = rot + (k+0.5)*segAng;   // 文字位于段中央
-      const label = ring.labels[k];
-      if(label){
-        const lx = cx + Math.cos(midAng)*rMid;
-        const ly = cy + Math.sin(midAng)*rMid;
-        ctx.save();
-        ctx.translate(lx, ly);
-        ctx.rotate(midAng + Math.PI/2);   // 使字形"下方"对准圆心
-        ctx.fillStyle = isSym ? '#ffffff' : ((k%2===0)? ring.color0 : ring.color1);   // 卦象符号纯白，其余环相邻段交替双色
-        ctx.shadowColor = isSym ? 'rgba(255,255,255,.6)' : ring.color0;
-        ctx.shadowBlur = isSym ? 3 : 6;
-        ctx.fillText(label, 0, 0);
-        ctx.shadowBlur=0;
-        ctx.restore();
-      }
+      const l1 = ring.labels[k];
+      if(l1) drawLabel(l1, midAng, rRow1);    // 上行
+      const l2 = has2 ? ring.labels2[k] : null;
+      if(l2) drawLabel(l2, midAng, rRow2);    // 下行（第二行）
     }
 
     // 选中高亮（画布可见反馈）：内外各一圈金色虚线
@@ -707,14 +833,9 @@
    */
   const HISTORY_LIMIT=50;
   let undoStack=[], redoStack=[];
+  // 复用 collectState()（与 saveState 同一序列化），不再重复结构；不存 center.angle（实时旋转，撤销无需回退）
   function snapshot(){
-    return JSON.stringify({
-      center:{angle:center.angle,speed:center.speed,dir:center.dir,visible:center.visible,lock:center.lock},
-      rings:rings.map(r=>({id:r.id,theme:r.theme,segments:r.segments,labels:r.labels.slice(),
-        name:r.name,color0:r.color0,color1:r.color1,speed:r.speed,dir:r.dir,angle:r.angle,
-        visible:r.visible,lock:r.lock})),
-      selectedId, speedMax:SPEED_MAX
-    });
+    return JSON.stringify(collectState());
   }
   function pushHistory(){                 // 在每次"修改前"调用
     undoStack.push(snapshot());
@@ -783,6 +904,7 @@
           <div class="card-name">${r.name}<small>${r.segments} 段 · 半径${Math.round(r._outer||0)}</small></div>
           <div class="spacer"></div>
           <button class="iconbtn" data-act="edit" title="编辑该环文字">✎</button>
+          <button class="iconbtn" data-act="edit2" title="编辑该环第二行文字（上下两行）">↕</button>
           <button class="iconbtn" data-act="lock" title="固定圆环（暂停旋转）">${r.lock?'🔒':'🔓'}</button>
           <button class="iconbtn" data-act="vis" title="显示/隐藏">${r.visible?'👁':'🚫'}</button>
           <button class="iconbtn" data-act="del" title="删除圆环">✕</button>
@@ -802,6 +924,10 @@
         <div class="speed-row" style="justify-content:flex-end;margin-bottom:0">
           <label style="margin-right:6px">偏移角(°)</label>
           <input type="range" class="ang-range" min="0" max="360" step="1" value="${Math.round(((r.angle%360)+360)%360)}" style="width:120px;flex:none">
+        </div>
+        <div class="speed-row" style="justify-content:flex-end;margin-bottom:0">
+          <label style="margin-right:6px">字号(px)</label>
+          <input type="number" class="font-num" min="6" max="60" step="1" value="${r.fontSize||''}" placeholder="自动">
         </div>
         </div>
       `;
@@ -833,6 +959,13 @@
         ang.addEventListener('pointerdown',pushHistory);
         ang.addEventListener('keydown',pushHistory);
         ang.addEventListener('input',()=>{ r.angle=parseInt(ang.value,10); }); }
+      // 字号（0/空 = 自动；>0 覆盖自动计算）— 不入历史（纯视图微调），focus 时存档一次
+      const fnum=card.querySelector('.font-num');
+      if(fnum){
+        fnum.addEventListener('focus',pushHistory);
+        fnum.addEventListener('input',()=>{ let v=parseInt(fnum.value,10); r.fontSize = (isNaN(v)||v<=0)?0:Math.max(6,Math.min(60,v)); });
+        fnum.addEventListener('blur',()=>{ if(!r.fontSize) fnum.value=''; });
+      }
       // ▾ 折叠卡片（不入历史——纯视图状态）
       card.querySelector('[data-act=fold]')?.addEventListener('click',(e)=>{ e.stopPropagation(); r.folded=!r.folded; card.classList.toggle('folded',!!r.folded); });
       if(r.folded) card.classList.add('folded');
@@ -850,6 +983,19 @@
         r.labels = labs; r.segments = labs.length; r.theme='custom';   // 编辑过文字的环降级为 custom 主题
         renderPanel();
         toast('已更新该环文字（'+labs.length+' 段）');
+      });
+      // 第二行文字编辑（上下两行）：不降级主题，仅设置/清空 labels2
+      card.querySelector('[data-act=edit2]')?.addEventListener('click',(e)=>{
+        e.stopPropagation();
+        const cur = Array.isArray(r.labels2)? r.labels2.join(',') : '';
+        const input = window.prompt('编辑该环【第二行】文字（逗号/空格分隔，将自动对齐到 '+r.segments+' 段）：', cur);
+        if(input==null) return;
+        let labs2 = parseLabels(input);
+        pushHistory();
+        if(labs2.length===0){ r.labels2=null; }
+        else { labs2 = labs2.slice(0, r.segments); while(labs2.length<r.segments) labs2.push(''); r.labels2 = labs2; }
+        renderPanel();
+        toast(r.labels2? ('已更新第二行（'+r.labels2.length+' 段）') : '已清空第二行');
       });
     });
 
@@ -869,6 +1015,7 @@
     } else {
       selinfoEl.style.display='none';
     }
+    if(booted) saveState();      // 任何面板刷新（即任何配置修改）后自动存盘
   }
 
   /* 中心太极控制卡（结构与环卡片一致，无编辑/删除按钮） */
@@ -983,6 +1130,19 @@
   const btnCenterToggle=document.getElementById('btnCenterToggle');
   btnCenterToggle.addEventListener('click',()=>{ pushHistory(); toggleCenterVisible(); renderPanel(); });
 
+  /* 恢复默认布局：清除本地存档并重新植入出厂预设（renderPanel 内会自动把默认布局存盘） */
+  document.getElementById('btnResetDefault').addEventListener('click',()=>{
+    if(!window.confirm('恢复默认布局会清除本地保存的所有修改，确定继续？')) return;
+    try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+    rings.length=0;
+    selectedId='center';
+    seedDefaultRings();
+    center.speed=26; center.dir=1; center.visible=true; center.lock=false; center.angle=0;
+    updateCenterBtn();
+    renderPanel();
+    toast('已恢复默认布局');
+  });
+
   /* 「＋ 添加到最外层」 */
   document.getElementById('btnAdd').addEventListener('click',()=>{
     const theme=document.getElementById('themeSel').value;
@@ -1015,6 +1175,15 @@
     renderPanel();
     toast('转速上限已设为 '+v+'°/s');
   });
+
+  // 全局字号倍率：统一缩放所有环文字（实时 input 更新显示，change 时存档）
+  const gfRange=document.getElementById('globalFontRange');
+  const gfVal=document.getElementById('globalFontVal');
+  gfRange.addEventListener('input',()=>{
+    GLOBAL_FONT_SCALE = parseFloat(gfRange.value)||1;
+    if(gfVal) gfVal.textContent = Math.round(GLOBAL_FONT_SCALE*100)+'%';
+  });
+  gfRange.addEventListener('change',()=>{ saveState(); });
 
   /* toast：右下角浮动提示，1.4s 自动消失 */
   let toastTimer=null;
@@ -1157,7 +1326,11 @@
 
   /* ---------------- 启动 ---------------- */
   window.addEventListener('resize',()=>{ resize(); syncHeaderShowPos(); });
+  // 关闭/切换标签前兜底存盘：即使只改了偏移角也保证最新状态落盘
+  window.addEventListener('beforeunload', saveState);
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') saveState(); });
   resize();
+  booted = true;          // 启动完成：此后每次修改都会自动存盘
   renderPanel();
   requestAnimationFrame(frame);
 })();
